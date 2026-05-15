@@ -294,3 +294,181 @@ Status: 추가 반복 필요
 
 추가 쓰기:
 - 오늘 배운 표현을 사용해서 “내 일과 영어”에 대해 영어로 3문장 쓰기.
+
+## Step 002-2 첨삭
+
+제출일: 2026-05-15 17:54:32 KST (+0900)
+
+### 전체 평가
+
+좋아진 점:
+- `in English`, `listen to`, `at work`, `ten words every day`가 많이 좋아짐.
+- 2, 5, 6, 7, 8번은 거의 맞거나 완전히 맞음.
+- Step 002의 핵심 전치사는 대부분 감을 잡았음.
+
+아직 확인이 필요한 점:
+- 시간 길이에는 여전히 `for`가 빠질 수 있음.
+- `want to`와 `need to`는 문법은 비슷하지만 의미가 다름.
+- this/these + 단수/복수 구분 필요.
+- 추가 쓰기에서는 자연스러운 영어 어순과 표현이 아직 흔들림.
+
+판정:
+- Step 002는 거의 통과 수준.
+- 다만 우리가 정한 기준상 “실제로 쓸 수 있음”을 확인하기 위해 Step 002-3 짧은 최종 확인을 한 번 더 진행한다.
+
+### 문항별 첨삭
+
+1. 나는 퇴근 후에 한 시간 동안 영어를 공부할 수 있어.
+
+제출:
+- I can study English one hour after work.
+
+교정:
+- I can study English for one hour after work.
+
+설명:
+- 한 시간 동안 = for one hour
+- 시간 길이에는 `for`가 필요함.
+
+2. 나는 영어로 짧은 이메일을 쓸 수 있어.
+
+제출:
+- I can write short emails in English.
+
+교정:
+- I can write short emails in English.
+
+설명:
+- 좋음. 정확함.
+
+3. 나는 3개월 안에 기본 대화를 하고 싶어.
+
+제출:
+- I need to have basic conversation within three months.
+
+교정:
+- I want to have basic conversations within three months.
+
+설명:
+- 원문은 “하고 싶어”이므로 `want to`가 맞음.
+- conversation은 셀 수 있는 명사라서 일반적으로 `conversations`가 자연스러움.
+- `need to have basic conversations`도 문법은 가능하지만 뜻이 “해야 한다”로 바뀜.
+
+4. 나는 회의 후에 이 문서를 검토할 수 있어.
+
+제출:
+- I can review this documents after the meeting.
+
+교정:
+- I can review this document after the meeting.
+
+설명:
+- this document = 이 문서 하나
+- these documents = 이 문서들
+
+5. 나는 매일 10개의 단어를 배워야 해.
+
+제출:
+- I need to learn ten words every day.
+
+교정:
+- I need to learn ten words every day.
+
+설명:
+- 좋음. 정확함.
+
+6. 나는 한 시간 동안 영어 뉴스를 들을 수 있어.
+
+제출:
+- I can listen to English news for one hour.
+
+교정:
+- I can listen to English news for one hour.
+
+설명:
+- 좋음. `listen to`와 `for one hour` 모두 정확함.
+
+7. 나는 직장에서 영어를 자주 사용해.
+
+제출:
+- I often use English at work.
+
+교정:
+- I often use English at work.
+
+설명:
+- 좋음. `at work` 정확함.
+
+8. 나는 프로그래머라서 영어 문서를 더 잘 이해하고 싶어.
+
+제출:
+- I want to understand English documents better because I am a programmer.
+
+교정:
+- I want to understand English documents better because I am a programmer.
+
+더 자연스러운 표현:
+- Because I am a programmer, I want to understand English documents better.
+- I am a programmer, so I want to understand English documents better.
+
+설명:
+- 제출 문장도 맞음.
+- 실제 회화에서는 `I am a programmer, so ...` 구조가 더 쉽고 자연스러움.
+
+### 추가 쓰기 첨삭
+
+제출:
+- I am a programmer, so My work is coding and managing system with English documents.
+- so I need to understand English documents better.
+- I need to do not difficult use English at work.
+
+교정:
+- I am a programmer, so my work involves coding and managing systems with English documents.
+- So I need to understand English documents better.
+- I want to use English at work more comfortably.
+
+쉬운 버전:
+- I am a programmer, so I often write code and manage systems.
+- I need to understand English documents better.
+- I want to use English at work more comfortably.
+
+설명:
+- 문장 중간의 `my`는 소문자.
+- system은 일반적인 여러 시스템이면 `systems`.
+- `My work is coding`도 의미는 통하지만 `my work involves coding`이 더 자연스러움.
+- `do not difficult use`는 영어식 구조가 아님.
+- “어렵지 않게 사용하다”는 초급에서는 `use English more comfortably`로 표현하는 게 좋음.
+
+## Step 002-3 최종 확인 훈련
+
+Status: 최종 확인 필요
+
+목표:
+- Step 002를 끝내기 전 마지막 정확도 확인.
+- 새 내용을 더 늘리지 않고, 자주 흔들린 부분만 확인한다.
+
+### 마지막으로 외울 문장
+
+1. I can study English for one hour after work.
+2. I want to have basic conversations within three months.
+3. I can review this document after the meeting.
+4. I often use English at work.
+5. I want to use English at work more comfortably.
+
+### 최종 확인 숙제
+
+아래 문장을 영어로 바꾸기.
+
+1. 나는 퇴근 후에 한 시간 동안 영어를 공부할 수 있어.
+2. 나는 3개월 안에 기본 대화를 하고 싶어.
+3. 나는 회의 후에 이 문서를 검토할 수 있어.
+4. 나는 직장에서 영어를 더 편하게 사용하고 싶어.
+5. 나는 프로그래머라서 영어 문서를 더 잘 이해해야 해.
+
+추가 자기교정:
+아래 틀린 문장을 직접 고치기.
+
+1. I can study English one hour after work.
+2. I want to basic conversation within three months.
+3. I can review this documents after the meeting.
+4. I need to do not difficult use English at work.

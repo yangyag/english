@@ -1,6 +1,6 @@
 # 현민 영어 학습 인덱스
 
-Last updated: 2026-05-15 17:37:08 KST (+0900)
+Last updated: 2026-05-15 17:54:32 KST (+0900)
 
 이제 영어 학습은 Day가 아니라 Step 기준으로 진행한다.
 하루에 시간이 많으면 Step 2개, 3개를 진행해도 된다.
@@ -9,8 +9,8 @@ Last updated: 2026-05-15 17:37:08 KST (+0900)
 ## 현재 상태
 
 - 현재 레벨: A1 후반 ~ A2 초반
-- 현재 진행: Step 002-2 반복 훈련 진행 중
-- 현재 숙제: `steps/step-002-prepositions.md`의 Step 002-2 추가 숙제 확인
+- 현재 진행: Step 002-3 최종 확인 진행 중
+- 현재 숙제: `steps/step-002-prepositions.md`의 Step 002-3 최종 확인 숙제 확인
 - 전체 진도 기록: `progress.md` 확인
 
 ## 파일 구조
