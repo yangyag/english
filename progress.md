@@ -1,12 +1,12 @@
 # 영어 학습 진도 기록
 
-Last updated: 2026-05-15 17:05:11 KST (+0900)
+Last updated: 2026-05-15 17:37:08 KST (+0900)
 
 ## 현재 진행 상태
 
 - 현재 Step: Step 002
-- 상태: 숙제 대기 중
-- 다음 할 일: `steps/step-002-prepositions.md`의 Step 2 숙제 제출 및 첨삭
+- 상태: 1차 숙제 첨삭 완료, Step 002-2 반복 훈련 필요
+- 다음 할 일: `steps/step-002-prepositions.md`의 Step 002-2 추가 숙제 제출 및 첨삭
 
 ## Step 로그
 
@@ -39,13 +39,21 @@ Last updated: 2026-05-15 17:05:11 KST (+0900)
 
 상태:
 - 수업 제공 완료
-- 숙제 대기 중
+- 1차 숙제 제출 완료
+- 1차 첨삭 완료
+- 반복 훈련 진행 중
 
 핵심 목표:
 - with = ~와
 - after = ~후에
 - for = 시간 길이
 - in = 영어로/장소/기간 안에
+
+1차 숙제 평가:
+- with / after / in은 일부 문장에서 잘 사용함.
+- `I need to read English documents with my team.`은 좋음.
+- for 시간 길이, want to 뒤 동사, listen to, at work가 아직 흔들림.
+- Step 002는 아직 완료하지 않고 Step 002-2 반복 훈련으로 진행.
 
 ## 반복 오류 누적 목록
 
@@ -64,9 +72,12 @@ Last updated: 2026-05-15 17:05:11 KST (+0900)
    - by work out X → after work O
    - 30 minutes X → for 30 minutes O
    - that english X → in English O
+   - in work X → at work O
+   - listen English news X → listen to English news O
 
 4. 어순
    - words more X → more words O
+   - words for ten X → ten words O
 
 ## 다음에 할 일
 
@@ -74,5 +85,5 @@ Last updated: 2026-05-15 17:05:11 KST (+0900)
 1. 이 파일을 읽는다.
 2. 현재 Step을 확인한다.
 3. `steps/step-002-prepositions.md`를 읽는다.
-4. 숙제 답안을 받거나, 이미 제출했다면 첨삭한다.
+4. Step 002-2 추가 숙제 답안을 받거나, 이미 제출했다면 첨삭한다.
 5. 끝나면 progress.md 업데이트한다.
