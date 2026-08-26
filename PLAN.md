@@ -1,7 +1,7 @@
 # 프론트 · 배포 계획서
 
 작성일: 2026-08-26 (AGENTS.md 기준)
-상태: M1–M8 완료(2026-08-26). 앱은 `https://yangyag4.duckdns.org` (nginx → 8089).
+상태: M1–M8 완료(2026-08-26). 다음 작업은 M9(예문 한글 DB 적재·화면). 앱은 `https://yangyag4.duckdns.org`.
 
 ## 1. 목표
 
@@ -69,7 +69,7 @@
   - `review`: 어제(마지막) 구간 10장 복습 → 완료 버튼 → `POST /v1/today/review`
   - `new`: 신규 10장 → `POST /v1/today/new`
   - `done`: 오늘 완료 안내 + **오늘 더 하기** + 진도 보기 (둘 다 버튼)
-- 카드 UX: 앞면 단어, 뒷면 뜻+예문(+예문 한글은 `example_ko`, 번역 적재는 별도). 뒤집고 나서 알아요/몰라요 선택.
+- 카드 UX: 앞면 단어, 뒷면 뜻+예문. 예문 아래 한글은 M9 (`example_ko`). 뒤집고 나서 알아요/몰라요 선택.
 - 제출은 10장 결과를 모아 **한 번에** POST (구간 순위 전체).
 - `POST /v1/today/new` 409(복습 미완료) 처리: 복습 화면으로 되돌린다.
 - `done` 이후 `GET/POST /v1/today/extra` 로 다음 10개를 더 한다. 다음날 복습은 마지막 10개.
@@ -98,6 +98,16 @@
 | M6 | ~~프론트 이미지 빌드~~ ✅ | `english-front:1.0` linux/amd64 |
 | M7 | ~~EC2 배포~~ ✅ | `english-front` 8089, `english-back.service`, DB 6,000 |
 | M8 | ~~운영 점검~~ ✅ | `/v1/health`, 메모리, 로그, README |
+| M9 | 예문 한글 적재·표시 | `vocab/*.md` 예문번역이 끝난 **다음날**. import 로컬+EC2, 카드 예문 아래 한글 표시, 프론트 이미지 재배포 |
+
+선행: 워크플로 `example-ko` 의 vocab 번역(Translate)이 끝나야 한다. 번역 파일만 있고 DB/화면이 비어 있으면 M9를 한다. 코드에 `example_ko` 필드가 있어도 **적재와 운영 화면 반영은 M9**.
+
+M9 순서:
+
+1. `vocab/*.md` 에 `- 예문번역:` 6,000개 있는지 확인.
+2. `scripts/import_words.py` 로 로컬 `english.word.example_ko` upsert, 이어서 `--ec2`.
+3. 카드 뒷면: 영어 예문 아래 한글 (`example_ko` 있을 때만).
+4. pytest, `nuxt generate`, `english-front:1.0` 다시 올려 `yangyag4` 에서 확인.
 
 ## 6. 배포 상세 (M6–M7)
 
