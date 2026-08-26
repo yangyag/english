@@ -142,9 +142,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           v-for="(word, i) in deck"
           :key="word.rank"
           :class="{
-            current: i === index,
-            known: results.find((item) => item.rank === word.rank)?.known === true,
-            unknown: results.find((item) => item.rank === word.rank)?.known === false,
+            'is-current': i === index,
+            'is-known': results.find((item) => item.rank === word.rank)?.known === true,
+            'is-unknown': results.find((item) => item.rank === word.rank)?.known === false,
           }"
         />
       </ol>
@@ -201,15 +201,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 }
 .dots li {
   display: block;
+  box-sizing: border-box;
   flex: 0 0 10px;
   width: 10px;
   height: 10px;
+  min-width: 10px;
+  max-width: 10px;
   border-radius: 50%;
   background: #d9d0c2;
 }
-.dots li.current { outline: 2px solid #1e2a24; outline-offset: 2px; }
-.dots li.known { background: #2c6e49; }
-.dots li.unknown { background: #b23a2f; }
+.dots li.is-current { outline: 2px solid #1e2a24; outline-offset: 2px; }
+.dots li.is-known { background: #2c6e49; }
+.dots li.is-unknown { background: #b23a2f; }
 .actions { min-height: 88px; }
 .hint, .summary { margin: 12px 0; text-align: center; color: #5b5348; }
 .row {
@@ -229,7 +232,7 @@ button {
 }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 .ghost { background: #ece6da; color: #1c1914; }
-.known { background: #2c6e49; color: #fff; min-width: 112px; }
-.unknown { background: #b23a2f; color: #fff; min-width: 112px; }
+button.known { background: #2c6e49; color: #fff; min-width: 112px; }
+button.unknown { background: #b23a2f; color: #fff; min-width: 112px; }
 .primary { background: #1e2a24; color: #f4efe4; min-width: 140px; }
 </style>
