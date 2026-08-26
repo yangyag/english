@@ -1,3 +1,9 @@
+import os
+
+# 테스트는 실제 학습 데이터(english 스키마)와 격리한다.
+# 실제 env 변수는 .env 파일보다 우선하므로, app 임포트 전에 지정한다.
+os.environ.setdefault("PGSCHEMA", "english_test")
+
 from datetime import date
 
 import pytest
