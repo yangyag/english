@@ -1,7 +1,7 @@
 # 프론트 · 배포 계획서
 
 작성일: 2026-08-26 (AGENTS.md 기준)
-상태: M1–M8 완료(2026-08-26). 앱은 WireGuard `http://10.66.66.1:8089`.
+상태: M1–M8 완료(2026-08-26). 앱은 `https://yangyag4.duckdns.org` (nginx → 8089).
 
 ## 1. 목표
 
@@ -16,7 +16,7 @@
 - 기존 컨테이너 7개 + `english-front` (3.4Mi / 64Mi). FastAPI RSS 약 70Mi / 192Mi.
 - `auto-postgres` 는 `auto_default` 네트워크에 있고 별칭 `postgres` 로 접근 가능.
   호스트에는 `127.0.0.1:5432` 만 공개.
-- **8089** = `english-front`. 공인 IP로는 타임아웃, WireGuard `10.66.66.1:8089` 는 200.
+- **8089** = `english-front`. 호스트 nginx `yangyag4.duckdns.org` → `127.0.0.1:8089`.
 
 ### 저장소
 

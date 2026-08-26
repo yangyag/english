@@ -109,7 +109,7 @@ EC2 SSH:
 - 이 서버에서 `npm run build` / `docker build` 하지 않는다. 프론트 이미지는 로컬에서 만들어 올리고, 백엔드는 호스트 파이썬(venv + systemd)으로 돌린다.
 - 프론트는 Nuxt 3 + TypeScript. SSR 없이 정적 생성으로 배포한다. 로컬에서 빌드한 nginx 이미지(Docker)를 올린다.
 - 백엔드는 Docker 없이 EC2 호스트 파이썬(venv + systemd)로 uvicorn 워커 1개를 돌린다.
-- 앱 URL: WireGuard `http://10.66.66.1:8089` (공인 IP 8089는 보안그룹에서 막혀 있음).
+- 앱 URL: `https://yangyag4.duckdns.org` (호스트 nginx → `127.0.0.1:8089`). HTTP는 HTTPS로 301.
 - nginx 컨테이너 `english-front` (`mem_limit 64m`, 호스트 8089). FastAPI `english-back.service` (`MemoryMax=192M`, `:8000`).
 - host-gateway가 `127.0.0.1`에 닿지 않아 FastAPI는 `0.0.0.0:8000`에 연다. 화면은 8089만 쓴다.
 - 프론트 이미지 전달: 로컬에서 `docker save` 후 홈 디렉터리로 scp (`snap docker`는 `/tmp` 로드가 안 됨).
