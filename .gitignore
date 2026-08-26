@@ -10,6 +10,9 @@ __pycache__/
 # build
 dist/
 build/
+.nuxt/
+.output/
+.data/
 .next/
 out/
 .turbo/
