@@ -37,14 +37,14 @@
 
 ```
 브라우저 ── :8089 ── nginx:alpine (정적 Nuxt, Docker)
-                        └─ /v1 프록시 ── host-gateway:8000
+                        └─ /v1 프록시 ── host-gateway:8090
                                            └─ FastAPI (호스트 파이썬 venv, uvicorn 워커 1, systemd)
                                                 └─ 127.0.0.1:5432 ── auto-postgres (english 스키마)
 ```
 
 - **Docker 이미지는 프론트(nginx) 하나만** 만든다. 백엔드는 EC2 호스트에서
   파이썬 venv + systemd 서비스(`english-back.service`)로 돌린다.
-- 백엔드는 `0.0.0.0:8000`. host-gateway(`172.17.0.1`)는 `127.0.0.1`에 닿지 않는다.
+- 백엔드는 `0.0.0.0:8090`. host-gateway(`172.17.0.1`)는 `127.0.0.1`에 닿지 않는다.
   DB 는 호스트 `127.0.0.1:5432`. `auto_default` 네트워크 연결이나 SSH 터널 불필요.
 - 컨테이너 리소스 제한: nginx `mem_limit 64m`. FastAPI 는 호스트 프로세스라 systemd `MemoryMax=192M`.
 - 프론트 이미지 빌드는 로컬(WSL). EC2에는 `docker save | ssh docker load` 로만 전달.
@@ -52,8 +52,8 @@
 
 ### 로컬 개발
 
-- `back`: `.venv` uvicorn 8000.
-- `front`: `nuxt dev` (3000). `nuxt.config.ts` 의 `routeRules`/dev proxy 로 `/v1` 을 `127.0.0.1:8000` 에 프록시.
+- `back`: `.venv` uvicorn 8090.
+- `front`: `nuxt dev` (3000). `nuxt.config.ts` 의 `routeRules`/dev proxy 로 `/v1` 을 `127.0.0.1:8090` 에 프록시.
 
 ## 4. 화면 설계
 
@@ -87,7 +87,7 @@
 | M2 | ~~API 타입/클라이언트~~ ✅ | `front/types/api.ts` + `useEnglishApi` |
 | M3 | ~~오늘 학습 화면~~ ✅ | 카드 뒤집기, 10장 일괄 제출, 409 시 재조회 |
 | M4 | ~~진도 화면~~ ✅ | `/progress` 수치 표시 |
-| M5 | ~~로컬 통합 검증~~ ✅ | pytest 10 passed, nginx `:8089` → FastAPI `:8000` |
+| M5 | ~~로컬 통합 검증~~ ✅ | pytest 10 passed, nginx `:8089` → FastAPI `:8090` |
 | M6 | ~~프론트 이미지 빌드~~ ✅ | `english-front:1.0` linux/amd64 |
 | M7 | ~~EC2 배포~~ ✅ | `english-front` 8089, `english-back.service`, DB 6,000 |
 | M8 | ~~운영 점검~~ ✅ | `/v1/health`, 메모리, 로그, README |
@@ -100,7 +100,7 @@
 2. `docker save english-front | gzip | ssh ... docker load` 로 전달.
 3. EC2: `~/english/docker-compose.yml` (서비스 front 하나, 8089 공개, `mem_limit 64m`).
    - 컨테이너에서 호스트의 FastAPI 를 찍기 위해 `extra_hosts: host.docker.internal:host-gateway`.
-   - nginx 설정: `/v1` → `proxy_pass http://host.docker.internal:8000` (no-cache), 나머지 정적.
+   - nginx 설정: `/v1` → `proxy_pass http://host.docker.internal:8090` (no-cache), 나머지 정적.
 
 ### 백엔드 (호스트 파이썬, Docker 아님)
 
@@ -108,7 +108,7 @@
 2. EC2: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
    (의존성이 가벼워 서버 부담 없음. 빌드 없는 순수 설치.)
 3. systemd 유닛 `english-back.service`:
-   - `ExecStart=.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1`
+   - `ExecStart=.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8090 --workers 1`
    - `EnvironmentFile=/home/ubuntu/english/.env` (DB 접속은 `127.0.0.1:5432`)
    - `MemoryMax=192M`, `Restart=always`, 서버 재부팅 시 자동 기동(`enable`).
 4. 검증: `curl 10.66.66.1:8089/`, `curl :8089/v1/today`, `curl :8089/v1/health`, `systemctl status english-back`.

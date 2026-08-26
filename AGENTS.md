@@ -43,7 +43,7 @@
 - 프론트는 nginx 이미지로 만든다. 빌드는 로컬에서만 하고 EC2에는 `docker load` 로 올린다.
 - 백엔드는 Docker에 넣지 않는다. EC2 호스트에서 파이썬 venv + systemd(`english-back.service`)로 uvicorn 워커 1개를 돌린다.
 - 런타임은 nginx 컨테이너(정적 Nuxt, `mem_limit 64m`) + 호스트 파이썬 FastAPI 워커 1개뿐이다. Redis, 큐, Node 서버 없음. Nuxt SSR 서버도 띄우지 않는다.
-- FastAPI는 `0.0.0.0:8000` (nginx host-gateway 접근용). 브라우저 진입은 nginx `8089`. DB는 호스트 `127.0.0.1:5432`.
+- FastAPI는 `0.0.0.0:8090` (nginx host-gateway 접근용). 브라우저 진입은 nginx `8089`. DB는 호스트 `127.0.0.1:5432`.
 - EC2 Postgres는 `127.0.0.1:5432` 만 연다. 원격 import는 `scripts/import_words.py --ec2` (SSH 터널).
 
 ## Git

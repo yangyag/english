@@ -12,7 +12,7 @@
 - Postgres `app.english` 스키마, 로컬과 EC2 모두 단어 6,000개 import
 - FastAPI 백엔드 (`back/`)와 API 테스트
 - Nuxt 프론트 (`front/`, 오늘 학습 + 진도)
-- EC2 배포: nginx `english-front` `:8089` + systemd `english-back` `:8000`
+- EC2 배포: nginx `english-front` `:8089` + systemd `english-back` `:8090`
 
 ## 구성
 
@@ -75,10 +75,10 @@ cd back
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8090
 ```
 
-프론트 (`/v1` 은 8000으로 프록시):
+프론트 (`/v1` 은 8090으로 프록시):
 
 ```powershell
 cd front
@@ -110,7 +110,7 @@ EC2 SSH:
 - 프론트는 Nuxt 3 + TypeScript. SSR 없이 정적 생성으로 배포한다. 로컬에서 빌드한 nginx 이미지(Docker)를 올린다.
 - 백엔드는 Docker 없이 EC2 호스트 파이썬(venv + systemd)로 uvicorn 워커 1개를 돌린다.
 - 앱 URL: `https://yangyag4.duckdns.org` (호스트 nginx → `127.0.0.1:8089`). HTTP는 HTTPS로 301.
-- nginx 컨테이너 `english-front` (`mem_limit 64m`, 호스트 8089). FastAPI `english-back.service` (`MemoryMax=192M`, `:8000`).
-- host-gateway가 `127.0.0.1`에 닿지 않아 FastAPI는 `0.0.0.0:8000`에 연다. 화면은 8089만 쓴다.
+- nginx 컨테이너 `english-front` (`mem_limit 64m`, 호스트 8089). FastAPI `english-back.service` (`MemoryMax=192M`, `:8090`).
+- host-gateway가 `127.0.0.1`에 닿지 않아 FastAPI는 `0.0.0.0:8090`에 연다. 화면은 8089만 쓴다.
 - 프론트 이미지 전달: 로컬에서 `docker save` 후 홈 디렉터리로 scp (`snap docker`는 `/tmp` 로드가 안 됨).
 - 헬스: `GET /v1/health`. 재기동 확인은 `systemctl status english-back`, `docker compose -f ~/english/docker-compose.yml ps`.

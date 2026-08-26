@@ -14,11 +14,11 @@ export default defineNuxtConfig({
       ],
     },
   },
-  // 로컬 개발: /v1 을 로컬 FastAPI(8000)로 프록시.
+  // 로컬 개발: /v1 을 로컬 FastAPI(8090)로 프록시.
   // 운영: nginx 가 /v1 을 프록시하므로 앱 코드는 상대 경로만 쓴다.
   nitro: {
     devProxy: {
-      '/v1': { target: 'http://127.0.0.1:8000/v1', changeOrigin: true },
+      '/v1': { target: 'http://127.0.0.1:8090/v1', changeOrigin: true },
     },
   },
 })
