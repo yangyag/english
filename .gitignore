@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build
+dist/
+build/
+.next/
+out/
+.turbo/
+.vercel/
+
+# env
+.env
+.env.*
+!.env.example
+
+# logs / cache
+*.log
+.cache/
+.DS_Store
+Thumbs.db
+
+# editor
+.idea/
+.vscode/
+*.swp
