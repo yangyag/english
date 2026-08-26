@@ -94,5 +94,6 @@ EC2 SSH:
 - 인스턴스: `t3.small` (2 vCPU, RAM 2GiB), 서울, `43.202.113.123`
 - 이름: 내 웹 서버 / `i-01a43a81bbb416051`
 - Docker는 이미 video / llm / postgres가 떠 있고 메모리가 빠듯하다. Swap을 쓰고 있다.
-- 이 서버에서 `npm run build` / `docker build` 하지 않는다. 이미지는 로컬에서 만든다.
-- 프론트는 Nuxt 3 + TypeScript. SSR 없이 정적 생성으로 배포한다. 로컬에서 빌드한 nginx 정적 파일 + FastAPI 워커 1개가 목표다.
+- 이 서버에서 `npm run build` / `docker build` 하지 않는다. 프론트 이미지는 로컬에서 만들어 올리고, 백엔드는 호스트 파이썬(venv + systemd)으로 돌린다.
+- 프론트는 Nuxt 3 + TypeScript. SSR 없이 정적 생성으로 배포한다. 로컬에서 빌드한 nginx 이미지(Docker)를 올린다.
+- 백엔드는 Docker 없이 EC2 호스트 파이썬(venv + systemd)로 uvicorn 워커 1개를 돌린다.

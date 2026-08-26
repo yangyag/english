@@ -6,7 +6,7 @@
 ## 1. 목표
 
 - Nuxt 3 + TypeScript 프론트를 만들어 하루 학습 플로우를 웹에서 쓸 수 있게 한다.
-- EC2 (t3.small)에 nginx(정적) + FastAPI(워커 1) 로 배포한다. 포트는 8089.
+- EC2 (t3.small)에 nginx(정적, Docker) + FastAPI(호스트 파이썬, 워커 1) 로 배포한다. 포트는 8089.
 
 ## 2. 현황 (2026-02 실측)
 
@@ -36,15 +36,19 @@
 ### 운영 토폴로지
 
 ```
-브라우저 ── :8089 ── nginx:alpine (정적 Nuxt)
-                        └─ /v1 프록시 ── FastAPI (uvicorn, 워커 1)
-                                            └─ auto_default 망 ── auto-postgres(english 스키마)
+브라우저 ── :8089 ── nginx:alpine (정적 Nuxt, Docker)
+                        └─ /v1 프록시 ── host-gateway:8000
+                                           └─ FastAPI (호스트 파이썬 venv, uvicorn 워커 1, systemd)
+                                                └─ 127.0.0.1:5432 ── auto-postgres (english 스키마)
 ```
 
-- FastAPI 컨테이너는 `auto_default` 네트워크에 붙여 DB를 `postgres:5432` 로 직접 찍는다.
-  호스트 포트/SSH 터널 불필요.
-- 컨테이너 리소스 제한: nginx `mem_limit 64m`, FastAPI `mem_limit 192m`.
-- 이미지 빌드는 전부 로컬(WSL). EC2에서는 `docker save | ssh docker load` 로만 전달.
+- **Docker 이미지는 프론트(nginx) 하나만** 만든다. 백엔드는 EC2 호스트에서
+  파이썬 venv + systemd 서비스(`english-back.service`)로 돌린다.
+- 백엔드는 `127.0.0.1:8000` 에만 바인딩. DB 는 이미 호스트에 공개된 `127.0.0.1:5432` 로 접속.
+  `auto_default` 네트워크 연결이나 SSH 터널 불필요.
+- 컨테이너 리소스 제한: nginx `mem_limit 64m`. FastAPI 는 호스트 프로세스라 systemd `MemoryMax=192M`.
+- 프론트 이미지 빌드는 로컬(WSL). EC2에는 `docker save | ssh docker load` 로만 전달.
+- 백엔드 배포는 `rsync` 로 코드 전송 후 `pip install -r requirements.txt` (경량이라 서버 부담 없음).
 
 ### 로컬 개발
 
@@ -84,27 +88,41 @@
 | M3 | 오늘 학습 화면 | review→new→done 전 구간 수동 통과 |
 | M4 | 진도 화면 | progress 수치 표시 |
 | M5 | 로컬 통합 검증 | `back` pytest 통과 + 프론트-백 실제 연동 시나리오 점검 |
-| M6 | 이미지 빌드 | `front/Dockerfile`(nginx), `back/Dockerfile`(uvicorn 1 worker) 로컬 빌드 성공 |
-| M7 | EC2 배포 | 8089 응답, compose `mem_limit` 적용, DB 연결 확인 |
+| M6 | 프론트 이미지 빌드 | `front/Dockerfile`(nginx) 로컬 빌드 성공. 백은 이미지화하지 않음 |
+| M7 | EC2 배포 | nginx 컨테이너 8089 응답, 백 systemd 기동, DB 연결 확인 |
 | M8 | 운영 점검 | 헬스체크, 메모리/스왑 추이, 로그 확인, README 갱신 |
 
 ## 6. 배포 상세 (M6–M7)
 
-1. 로컬: `nuxt generate` → `.output/public` 을 nginx:alpine 이미지에 COPY.
-2. 로컬: back 이미지 빌드 (`python:3.12-slim` + requirements).
-3. `docker save english-front | gzip | ssh ... docker load` (back 동일).
-4. EC2: `aws/` 근처가 아니라 홈 디렉터리에 `english/docker-compose.yml` 배치.
-   - networks: `auto_default` (external), 서비스 두 개(front 8089 공개, back 내부만).
-   - back 환경변수는 EC2의 `.env` 파일로 주입(비번 커밋 금지).
-5. 검증: `curl :8089/`, `curl :8089/v1/today`, `docker stats`.
+### 프론트 (Docker)
 
-롤백: 이전 이미지 태그(`english-front:이전`) 를 남겨두고 compose 에서 태그만 바꿔 재생성.
+1. 로컬: `nuxt generate` → `.output/public` 을 nginx:alpine 이미지에 COPY.
+2. `docker save english-front | gzip | ssh ... docker load` 로 전달.
+3. EC2: `~/english/docker-compose.yml` (서비스 front 하나, 8089 공개, `mem_limit 64m`).
+   - 컨테이너에서 호스트의 FastAPI 를 찍기 위해 `extra_hosts: host.docker.internal:host-gateway`.
+   - nginx 설정: `/v1` → `proxy_pass http://host.docker.internal:8000` (no-cache), 나머지 정적.
+
+### 백엔드 (호스트 파이썬, Docker 아님)
+
+1. `rsync` 로 `back/` 을 EC2 `~/english/back` 으로 전송.
+2. EC2: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
+   (의존성이 가벼워 서버 부담 없음. 빌드 없는 순수 설치.)
+3. systemd 유닛 `english-back.service`:
+   - `ExecStart=.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1`
+   - `EnvironmentFile=/home/ubuntu/english/back/.env` (DB 접속은 `127.0.0.1:5432`)
+   - `MemoryMax=192M`, `Restart=always`, 서버 재부팅 시 자동 기동(`enable`).
+4. 검증: `curl :8089/`, `curl :8089/v1/today`, `systemctl status english-back`.
+
+### 롤백
+
+- 프론트: 이전 이미지 태그(`english-front:이전`) 를 남겨두고 compose 태그만 바꿔 재생성.
+- 백엔드: rsync 전 `~/english/back` 을 `back.bak` 으로 복사해두고 되돌린 뒤 서비스 재시작.
 
 ## 7. 리스크와 대응
 
 | 리스크 | 대응 |
 |--------|------|
-| EC2 메모리 부족 | 이미지 빌드 전무, mem_limit 고정, nginx:alpine 사용, swap 모니터 |
+| EC2 메모리 부족 | 서버에서 빌드 전무, Docker 는 nginx 하나(mem_limit 64m), 백은 systemd MemoryMax, swap 모니터 |
 | 복습 게이트 우회 시도 | 프론트는 phase 만 따른다. 409 수신 시 review 로 되돌림. 게이트 로직은 백엔드 단독 유지 |
 | 날짜 경계(서울 자정) | 모든 날짜 판단은 백엔드(clock.py). 프론트는 표시만 |
 | 정적 배포 후 캐시 | nginx 에 `/v1` no-cache, 정적 자산은 hash 파일명이라 긴 캐시 |
@@ -113,5 +131,6 @@
 ## 8. 하지 않는 것
 
 - SSR, Node 런타임 서버, Redis, 큐, 인증, 본격 SRS.
-- EC2에서의 npm install / docker build.
+- EC2에서의 npm install / docker build / 이미지 빌드.
+- 백엔드의 Docker 이미지화. 백은 EC2 호스트 파이썬 + systemd 로만 운영한다.
 - 틀린 단어의 자동 재삽입.

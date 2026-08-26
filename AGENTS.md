@@ -39,8 +39,10 @@
 - 박스: `t3.small` 2GiB. Kafka/video/llm이 이미 떠 있다. 가용 RAM이 적다.
 - Postgres는 기존 `auto-postgres` 의 `yangyag` / `app` / `english` 를 쓴다. DB 컨테이너를 추가하지 않는다.
 - 호스트 8089가 다음 빈 포트다. 8083–8088은 다른 서비스 것이다.
-- EC2에서 프론트/백 이미지를 빌드하지 않는다. 로컬에서 만들고 올린다.
-- 런타임은 nginx(정적 Nuxt) + FastAPI 워커 1개만. Redis, 큐, Node 서버 없음. Nuxt SSR 서버도 띄우지 않는다.
+- 프론트는 nginx 이미지로 만든다. 빌드는 로컬에서만 하고 EC2에는 `docker load` 로 올린다.
+- 백엔드는 Docker에 넣지 않는다. EC2 호스트에서 파이썬 venv + systemd(`english-back.service`)로 uvicorn 워커 1개를 돌린다.
+- 런타임은 nginx 컨테이너(정적 Nuxt, `mem_limit 64m`) + 호스트 파이썬 FastAPI 워커 1개뿐이다. Redis, 큐, Node 서버 없음. Nuxt SSR 서버도 띄우지 않는다.
+- FastAPI는 `127.0.0.1:8000` 에만 바인딩하고 nginx 컨테이너가 `/v1` 을 프록시한다. DB는 호스트 `127.0.0.1:5432` 로 접속한다.
 - EC2 Postgres는 `127.0.0.1:5432` 만 연다. 원격 import는 `scripts/import_words.py --ec2` (SSH 터널).
 
 ## Git
