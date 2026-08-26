@@ -41,27 +41,24 @@ const exampleChunks = computed<Chunk[]>(() => {
   <button
     class="card"
     type="button"
-    :class="{ flipped: props.flipped }"
     :aria-pressed="props.flipped"
     :aria-label="props.flipped ? '카드 앞면으로' : '카드 뒤집기'"
     @click="emit('flip')"
   >
-    <div class="card-inner">
-      <div class="face front">
-        <span class="rank">{{ props.word.rank }}</span>
-        <p class="term">{{ props.word.word }}</p>
-        <p class="hint">탭해서 뜻을 봅니다</p>
-      </div>
-      <div class="face back">
-        <span class="rank">{{ props.word.rank }}</span>
-        <p class="term small">{{ props.word.word }}</p>
-        <p class="meaning">{{ props.word.meaning }}</p>
-        <p class="example">
-          <template v-for="(chunk, i) in exampleChunks" :key="i">
-            <mark v-if="chunk.hit" class="hit">{{ chunk.text }}</mark><template v-else>{{ chunk.text }}</template>
-          </template>
-        </p>
-      </div>
+    <div v-if="!props.flipped" class="face front">
+      <span class="rank">{{ props.word.rank }}</span>
+      <p class="term">{{ props.word.word }}</p>
+      <p class="hint">탭해서 뜻을 봅니다</p>
+    </div>
+    <div v-else class="face back">
+      <span class="rank">{{ props.word.rank }}</span>
+      <p class="term small">{{ props.word.word }}</p>
+      <p class="meaning">{{ props.word.meaning }}</p>
+      <p class="example">
+        <template v-for="(chunk, i) in exampleChunks" :key="i">
+          <mark v-if="chunk.hit" class="hit">{{ chunk.text }}</mark><template v-else>{{ chunk.text }}</template>
+        </template>
+      </p>
     </div>
   </button>
 </template>
@@ -69,35 +66,28 @@ const exampleChunks = computed<Chunk[]>(() => {
 <style scoped>
 .card {
   display: block;
+  box-sizing: border-box;
   width: 100%;
-  height: 320px;
+  max-width: 100%;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  perspective: 1200px;
   cursor: pointer;
-}
-.card-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.45s ease;
-}
-.card.flipped .card-inner {
-  transform: rotateY(180deg);
+  overflow: hidden;
 }
 .face {
-  position: absolute;
-  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 28px 24px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 280px;
+  padding: 36px 24px 28px;
   border-radius: 18px;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
+  position: relative;
   box-shadow: 0 18px 40px rgba(28, 25, 20, 0.18);
 }
 .front {
@@ -107,7 +97,6 @@ const exampleChunks = computed<Chunk[]>(() => {
 .back {
   background: #faf6ee;
   color: #1c1914;
-  transform: rotateY(180deg);
   border: 1px solid #e4dccb;
 }
 .rank {
@@ -121,11 +110,12 @@ const exampleChunks = computed<Chunk[]>(() => {
 }
 .term {
   margin: 0;
+  max-width: 100%;
   font-family: Georgia, 'Palatino Linotype', Palatino, serif;
   font-size: clamp(2rem, 8vw, 3.2rem);
   line-height: 1.15;
   text-align: center;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .term.small {
   font-size: 1.35rem;
@@ -140,19 +130,22 @@ const exampleChunks = computed<Chunk[]>(() => {
 }
 .meaning {
   margin: 0 0 16px;
+  max-width: 100%;
   font-size: 1.35rem;
   font-weight: 700;
   text-align: center;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 .example {
   margin: 0;
-  max-width: 36em;
+  max-width: 100%;
   font-size: 0.98rem;
   line-height: 1.55;
   text-align: center;
   color: #5b5348;
   font-style: italic;
+  overflow-wrap: anywhere;
 }
 .hit {
   margin: 0;

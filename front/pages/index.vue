@@ -149,7 +149,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         />
       </ol>
 
-      <WordCard :word="current" :flipped="flipped" @flip="flip" />
+      <WordCard :key="current.rank" :word="current" :flipped="flipped" @flip="flip" />
 
       <div class="actions">
         <template v-if="readyToSubmit">
@@ -175,7 +175,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </template>
 
 <style scoped>
-.today { display: grid; gap: 16px; }
+.today {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+}
 .head h1 { margin: 4px 0 0; font-size: 1.6rem; }
 .kicker, .meta { margin: 0; color: #6b6258; font-size: 0.92rem; }
 .banner { margin: 0; color: #5b5348; }
@@ -191,8 +197,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   margin: 0;
   padding: 0;
   justify-content: center;
+  min-width: 0;
 }
 .dots li {
+  display: block;
+  flex: 0 0 10px;
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -208,6 +217,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   gap: 8px;
   justify-content: center;
   flex-wrap: wrap;
+  min-width: 0;
 }
 button {
   border: 0;

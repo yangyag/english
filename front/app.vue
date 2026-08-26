@@ -12,14 +12,24 @@
 
 <style>
 * { box-sizing: border-box; }
-html, body { min-height: 100%; }
+html, body {
+  min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
 body {
   margin: 0;
   font-family: 'Pretendard', -apple-system, 'Segoe UI', Roboto, sans-serif;
   background: #f3efe4;
   color: #1c1914;
 }
-.app { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
+.app {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px 16px 40px;
+  overflow-x: hidden;
+}
 .nav {
   display: flex;
   gap: 16px;
@@ -34,5 +44,7 @@ body {
   border: 1px solid #e4dccb;
   border-radius: 16px;
   padding: 20px;
+  overflow: hidden;
+  min-width: 0;
 }
 </style>
