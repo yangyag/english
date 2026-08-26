@@ -20,6 +20,7 @@ class Word(Base):
     word: Mapped[str] = mapped_column(Text, nullable=False)
     meaning: Mapped[str] = mapped_column(Text, nullable=False)
     example: Mapped[str] = mapped_column(Text, nullable=False)
+    example_ko: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class StudyState(Base):

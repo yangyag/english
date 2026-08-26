@@ -5,6 +5,7 @@ export interface WordOut {
   word: string
   meaning: string
   example: string
+  example_ko: string
 }
 
 export interface TodayOut {
@@ -14,6 +15,7 @@ export interface TodayOut {
   new: WordOut[]
   review_done: boolean
   new_done: boolean
+  can_extra: boolean
 }
 
 export interface WordResultIn {

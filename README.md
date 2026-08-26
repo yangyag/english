@@ -35,6 +35,7 @@ aws/        EC2 SSH (connect.ps1 / connect.sh)
 - 날짜: Asia/Seoul
 - `GET /v1/today` 의 `phase`: `review` → `new` → `done`
 - 복습이 남아 있으면 신규 제출은 409
+- `done` 이후 `오늘 더 하기` 로 다음 10개를 더 할 수 있다. 다음날 복습은 마지막 10개다.
 - 알아/몰라 결과는 기록만 한다. 틀린 단어를 다음날 복습에 다시 넣지는 않는다.
 
 ## API
@@ -45,6 +46,8 @@ aws/        EC2 SSH (connect.ps1 / connect.sh)
 | `GET` | `/v1/today` | 오늘 복습/신규 목록 |
 | `POST` | `/v1/today/review` | 복습 10개 한 번에 제출 |
 | `POST` | `/v1/today/new` | 신규 10개 한 번에 제출 |
+| `GET` | `/v1/today/extra` | 오늘 할당이 끝난 뒤 다음 10개 |
+| `POST` | `/v1/today/extra` | 추가 10개 한 번에 제출 |
 | `GET` | `/v1/progress` | 학습 개수, 다음 순위, 연속일 |
 
 인증은 없다. 1인 사용.
@@ -55,7 +58,7 @@ Postgres. DB `app`, 스키마 `english`.
 
 | 테이블 | 역할 |
 |--------|------|
-| `word` | 순위, 철자, 뜻, 예문 |
+| `word` | 순위, 철자, 뜻, 예문, 예문 한국어(`example_ko`) |
 | `study_state` | 다음 신규 순위, 마지막 학습일 (1행) |
 | `study_session` | 날짜별 복습/신규 구간과 완료 시각 |
 | `word_result` | 세션별 알아/몰라 |

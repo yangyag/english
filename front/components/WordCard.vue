@@ -59,6 +59,7 @@ const exampleChunks = computed<Chunk[]>(() => {
           <mark v-if="chunk.hit" class="hit">{{ chunk.text }}</mark><template v-else>{{ chunk.text }}</template>
         </template>
       </p>
+      <p class="example-ko">{{ props.word.example_ko }}</p>
     </div>
   </button>
 </template>
@@ -145,6 +146,16 @@ const exampleChunks = computed<Chunk[]>(() => {
   text-align: center;
   color: #5b5348;
   font-style: italic;
+  overflow-wrap: anywhere;
+}
+.example-ko {
+  margin: 8px 0 0;
+  max-width: 100%;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  text-align: center;
+  color: #5b5348;
+  font-style: normal;
   overflow-wrap: anywhere;
 }
 .hit {

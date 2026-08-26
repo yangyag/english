@@ -11,6 +11,7 @@ class WordOut(BaseModel):
     word: str
     meaning: str
     example: str
+    example_ko: str
 
     model_config = {"from_attributes": True}
 
@@ -22,6 +23,7 @@ class TodayOut(BaseModel):
     new: list[WordOut]
     review_done: bool
     new_done: bool
+    can_extra: bool = False
 
 
 class WordResultIn(BaseModel):

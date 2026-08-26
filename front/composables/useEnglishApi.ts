@@ -52,6 +52,23 @@ export function useEnglishApi() {
     }
   }
 
+  async function getExtra(): Promise<TodayOut> {
+    try {
+      return await $fetch<TodayOut>('/v1/today/extra')
+    } catch (error) {
+      unwrap(error)
+    }
+  }
+
+  async function submitExtra(results: WordResultIn[]): Promise<TodayOut> {
+    const body: SubmitIn = { results }
+    try {
+      return await $fetch<TodayOut>('/v1/today/extra', { method: 'POST', body })
+    } catch (error) {
+      unwrap(error)
+    }
+  }
+
   async function getProgress(): Promise<ProgressOut> {
     try {
       return await $fetch<ProgressOut>('/v1/progress')
@@ -60,5 +77,5 @@ export function useEnglishApi() {
     }
   }
 
-  return { getToday, submitReview, submitNew, getProgress }
+  return { getToday, submitReview, submitNew, getExtra, submitExtra, getProgress }
 }

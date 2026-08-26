@@ -92,6 +92,7 @@ def today_payload(db: Session, today: date) -> TodayOut:
         new=[WordOut.model_validate(w) for w in new],
         review_done=session.review_done_at is not None,
         new_done=session.new_done_at is not None,
+        can_extra=_can_extra(db, session),
     )
 
 
@@ -103,8 +104,56 @@ def _expected_ranks(db: Session, session: StudySession, kind: str) -> list[int]:
     return [w.rank for w in _words(db, start, end)]
 
 
-def _save_results(db: Session, session: StudySession, kind: str, body: SubmitIn) -> int:
-    expected = _expected_ranks(db, session, kind)
+def _extra_words(db: Session) -> list[Word]:
+    settings = get_settings()
+    state = _state(db)
+    start, end = _range_for_new(state.next_rank, settings.batch_size, _max_rank(db))
+    return _words(db, start, end)
+
+
+def _can_extra(db: Session, session: StudySession) -> bool:
+    if session.review_from_rank is not None and session.review_done_at is None:
+        return False
+    if session.new_from_rank is None or session.new_done_at is None:
+        return False
+    return len(_extra_words(db)) > 0
+
+
+def _require_ready_for_extra(session: StudySession) -> None:
+    if session.review_from_rank is not None and session.review_done_at is None:
+        raise HTTPException(status_code=409, detail="복습을 먼저 완료하세요.")
+    if session.new_from_rank is not None and session.new_done_at is None:
+        raise HTTPException(status_code=409, detail="오늘 신규를 먼저 완료하세요.")
+    if session.new_from_rank is None:
+        raise HTTPException(status_code=400, detail="오늘 배울 새 단어가 없습니다.")
+
+
+def extra_payload(db: Session, today: date) -> TodayOut:
+    session = get_or_create_session(db, today)
+    _require_ready_for_extra(session)
+    words = _extra_words(db)
+    if not words:
+        raise HTTPException(status_code=400, detail="더 배울 단어가 없습니다.")
+    return TodayOut(
+        date=today,
+        phase="new",
+        review=[],
+        new=[WordOut.model_validate(w) for w in words],
+        review_done=session.review_done_at is not None,
+        new_done=True,
+        can_extra=True,
+    )
+
+
+def _save_results(
+    db: Session,
+    session: StudySession,
+    kind: str,
+    body: SubmitIn,
+    expected: list[int] | None = None,
+) -> int:
+    if expected is None:
+        expected = _expected_ranks(db, session, kind)
     if not expected:
         raise HTTPException(status_code=400, detail="오늘 제출할 단어가 없습니다.")
     got = [item.rank for item in body.results]
@@ -151,6 +200,21 @@ def submit_new(db: Session, today: date, body: SubmitIn) -> TodayOut:
     session.new_done_at = _now()
     state = _state(db)
     state.next_rank = session.new_to_rank + 1
+    state.last_study_date = today
+    db.flush()
+    return today_payload(db, today)
+
+
+def submit_extra(db: Session, today: date, body: SubmitIn) -> TodayOut:
+    session = get_or_create_session(db, today)
+    _require_ready_for_extra(session)
+    words = _extra_words(db)
+    expected = [w.rank for w in words]
+    if not expected:
+        raise HTTPException(status_code=400, detail="더 배울 단어가 없습니다.")
+    _save_results(db, session, "new", body, expected)
+    state = _state(db)
+    state.next_rank = expected[-1] + 1
     state.last_study_date = today
     db.flush()
     return today_payload(db, today)

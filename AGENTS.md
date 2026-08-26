@@ -20,8 +20,9 @@
 
 - API를 바꾸면 `back/tests` 에 테스트를 같이 고친다. `cd back` 후 `python -m pytest -q`.
 - 날짜는 `Asia/Seoul` (`app/clock.py`). 테스트는 `get_today` 를 오버라이드한다.
-- 복습은 하드 게이트다. `review_from_rank` 가 있는데 복습 미완료면 `POST /v1/today/new` 는 409.
-- review/new 제출은 단어 단위가 아니라 **오늘 해당 구간의 순위 전체**다. 프론트는 10장을 모아서 한 번에 POST 한다.
+- 복습은 하드 게이트다. `review_from_rank` 가 있는데 복습 미완료면 `POST /v1/today/new` 와 `/v1/today/extra` 는 409.
+- review/new/extra 제출은 단어 단위가 아니라 **해당 구간의 순위 전체**다. 프론트는 10장을 모아서 한 번에 POST 한다.
+- 오늘 신규가 끝난 뒤에만 `GET/POST /v1/today/extra` 로 다음 10개를 더 한다. 다음날 복습은 마지막에 배운 10개다.
 - `phase`: `review` | `new` | `done`.
 - 틀린 단어는 `word_result` 에만 남긴다. 다음날 복습 목록에 자동 재삽입하지 않는다.
 - 스키마/테이블은 `english`. SQLAlchemy 모델과 어긋나게 raw SQL 테이블을 만들지 않는다.

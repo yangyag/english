@@ -46,7 +46,7 @@ def clock():
 @pytest.fixture
 def words(db: Session) -> None:
     for i in range(1, 31):
-        db.merge(Word(rank=i, word=f"w{i}", meaning=f"뜻{i}", example=f"ex {i}"))
+        db.merge(Word(rank=i, word=f"w{i}", meaning=f"뜻{i}", example=f"ex {i}", example_ko=f"예{i}"))
     db.flush()
 
 

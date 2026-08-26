@@ -2,9 +2,10 @@
 import { ApiError } from '~/composables/useEnglishApi'
 import type { TodayOut, WordOut, WordResultIn } from '~/types/api'
 
-const { getToday, submitReview, submitNew } = useEnglishApi()
+const { getToday, submitReview, submitNew, getExtra, submitExtra } = useEnglishApi()
 
 const today = ref<TodayOut | null>(null)
+const extraMode = ref(false)
 const loading = ref(true)
 const submitting = ref(false)
 const error = ref('')
@@ -14,6 +15,7 @@ const results = ref<WordResultIn[]>([])
 
 const deck = computed<WordOut[]>(() => {
   if (!today.value) return []
+  if (extraMode.value) return today.value.new
   if (today.value.phase === 'review') return today.value.review
   if (today.value.phase === 'new') return today.value.new
   return []
@@ -28,6 +30,7 @@ const readyToSubmit = computed(
 )
 const phaseLabel = computed(() => {
   if (!today.value) return ''
+  if (extraMode.value) return '더 하기'
   if (today.value.phase === 'review') return '복습'
   if (today.value.phase === 'new') return '신규'
   return '완료'
@@ -42,6 +45,7 @@ function resetDeck() {
 async function load() {
   loading.value = true
   error.value = ''
+  extraMode.value = false
   try {
     today.value = await getToday()
     resetDeck()
@@ -77,16 +81,34 @@ function undo() {
   flipped.value = false
 }
 
+async function startExtra() {
+  loading.value = true
+  error.value = ''
+  try {
+    today.value = await getExtra()
+    extraMode.value = true
+    resetDeck()
+  } catch (caught) {
+    extraMode.value = false
+    error.value = caught instanceof ApiError ? caught.detail : '추가 학습을 열지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+}
+
 async function submit() {
   if (!today.value || !readyToSubmit.value) return
   submitting.value = true
   error.value = ''
   try {
-    if (today.value.phase === 'review') {
+    if (extraMode.value) {
+      await submitExtra(results.value)
+    } else if (today.value.phase === 'review') {
       await submitReview(results.value)
     } else {
       await submitNew(results.value)
     }
+    extraMode.value = false
     today.value = await getToday()
     resetDeck()
   } catch (caught) {
@@ -128,11 +150,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <p v-if="error" class="banner error">{{ error }}</p>
     <p v-else-if="loading" class="banner">불러오는 중…</p>
 
-    <template v-else-if="today?.phase === 'done'">
+    <template v-else-if="today?.phase === 'done' && !extraMode">
       <div class="done">
         <p class="done-title">오늘 학습을 마쳤습니다.</p>
-        <p class="done-copy">내일은 마지막에 배운 10개를 복습한 뒤에 신규가 열립니다.</p>
-        <NuxtLink class="link" to="/progress">진도 보기</NuxtLink>
+        <p class="done-copy">내일은 마지막에 배운 10개를 복습합니다. 오늘은 10개 더 할 수 있습니다.</p>
+        <div class="row">
+          <button
+            v-if="today.can_extra"
+            type="button"
+            class="primary"
+            :disabled="loading"
+            @click="startExtra"
+          >
+            오늘 더 하기
+          </button>
+          <NuxtLink class="link" to="/progress">진도 보기</NuxtLink>
+        </div>
       </div>
     </template>
 
@@ -189,7 +222,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .done { padding: 24px 8px 8px; text-align: center; }
 .done-title { margin: 0 0 8px; font-size: 1.25rem; font-weight: 700; }
 .done-copy { margin: 0 0 20px; color: #5b5348; line-height: 1.5; }
-.link { color: #1e2a24; font-weight: 700; }
+.link {
+  color: #1e2a24;
+  font-weight: 700;
+  align-self: center;
+}
 .dots {
   display: flex;
   gap: 6px;

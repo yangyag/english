@@ -32,3 +32,17 @@ def post_today_new(
     today: date = Depends(get_today),
 ) -> TodayOut:
     return study.submit_new(db, today, body)
+
+
+@router.get("/today/extra", response_model=TodayOut)
+def get_today_extra(db: Session = Depends(get_db), today: date = Depends(get_today)) -> TodayOut:
+    return study.extra_payload(db, today)
+
+
+@router.post("/today/extra", response_model=TodayOut)
+def post_today_extra(
+    body: SubmitIn,
+    db: Session = Depends(get_db),
+    today: date = Depends(get_today),
+) -> TodayOut:
+    return study.submit_extra(db, today, body)
