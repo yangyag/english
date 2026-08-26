@@ -1,4 +1,4 @@
-// Nuxt 설정. SSR 없이 정적 생성으로만 배포한다 (PLAN.md 참고).
+// Nuxt 설정. SSR 없이 정적 생성으로만 배포한다.
 export default defineNuxtConfig({
   ssr: false,
   compatibilityDate: '2026-08-26',
