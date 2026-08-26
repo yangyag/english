@@ -9,7 +9,7 @@
 ## 레이아웃
 
 - `back/` FastAPI. 앱 코드는 `back/app`, 테스트는 `back/tests`.
-- `front/` Vue (아직 없음). React/Next 쓰지 않는다.
+- `front/` Nuxt 3 + TypeScript (아직 없음). React/Next 쓰지 않는다.
 - `vocab/` 생성된 마크다운. `english.word` 의 원본.
 - `words/` PDF 원본.
 - `scripts/import_words.py` 1회성 import. 학습 경로에서 PDF/MD를 읽지 않는다.
@@ -28,11 +28,11 @@
 
 ## 프론트 (예정)
 
-- Vue + Vite, 폴더 `front/`.
+- Nuxt 3 + TypeScript, 폴더 `front/`. SSR 없이 정적 생성(`ssr: false`, `nuxt generate`)으로만 배포한다.
 - 화면은 오늘 학습과 진도 두 개면 충분하다.
 - 카드 UX: 앞면 단어, 뒷면 뜻+예문, 알아요/몰라요. 10장 후 일괄 제출.
 - `phase` 를 따른다. 복습 중에 신규로 가지 않는다.
-- 로컬은 Vite proxy 로 `/v1` 을 FastAPI에 붙인다.
+- 로컬은 Nuxt dev server의 proxy 로 `/v1` 을 FastAPI에 붙인다. 운영은 nginx 가 `/v1` 을 FastAPI에 프록시한다.
 
 ## EC2 / Docker
 
@@ -40,7 +40,7 @@
 - Postgres는 기존 `auto-postgres` 의 `yangyag` / `app` / `english` 를 쓴다. DB 컨테이너를 추가하지 않는다.
 - 호스트 8089가 다음 빈 포트다. 8083–8088은 다른 서비스 것이다.
 - EC2에서 프론트/백 이미지를 빌드하지 않는다. 로컬에서 만들고 올린다.
-- 런타임은 nginx(정적 Vue) + FastAPI 워커 1개만. Redis, 큐, 추가 Node 서버 없음.
+- 런타임은 nginx(정적 Nuxt) + FastAPI 워커 1개만. Redis, 큐, Node 서버 없음. Nuxt SSR 서버도 띄우지 않는다.
 - EC2 Postgres는 `127.0.0.1:5432` 만 연다. 원격 import는 `scripts/import_words.py --ec2` (SSH 터널).
 
 ## Git
