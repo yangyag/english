@@ -29,6 +29,9 @@ PEM = ROOT / "aws" / "test-keypair.pem"
 HEAD_RE = re.compile(r"^##\s+(\d+)\.\s+(.+?)\s*$")
 MEANING_RE = re.compile(r"^-\s*뜻:\s*(.+?)\s*$")
 EXAMPLE_RE = re.compile(r"^-\s*예문:\s*(.+?)\s*$")
+EXAMPLE_KO_RE = re.compile(r"^-\s*예문번역:\s*(.+?)\s*$")
+
+Row = tuple[int, str, str, str, str]
 
 DDL = """
 CREATE SCHEMA IF NOT EXISTS english;
@@ -36,17 +39,20 @@ CREATE TABLE IF NOT EXISTS english.word (
     rank INTEGER PRIMARY KEY,
     word TEXT NOT NULL,
     meaning TEXT NOT NULL,
-    example TEXT NOT NULL
+    example TEXT NOT NULL,
+    example_ko TEXT NOT NULL
 );
+ALTER TABLE english.word ADD COLUMN IF NOT EXISTS example_ko TEXT NOT NULL DEFAULT '';
 """
 
 UPSERT = """
-INSERT INTO english.word (rank, word, meaning, example)
-VALUES (%s, %s, %s, %s)
+INSERT INTO english.word (rank, word, meaning, example, example_ko)
+VALUES (%s, %s, %s, %s, %s)
 ON CONFLICT (rank) DO UPDATE
 SET word = EXCLUDED.word,
     meaning = EXCLUDED.meaning,
-    example = EXCLUDED.example;
+    example = EXCLUDED.example,
+    example_ko = EXCLUDED.example_ko;
 """
 
 
@@ -61,12 +67,12 @@ def load_env(path: Path) -> dict[str, str]:
     return out
 
 
-def parse_vocab(vocab_dir: Path) -> list[tuple[int, str, str, str]]:
+def parse_vocab(vocab_dir: Path) -> list[Row]:
     files = sorted(vocab_dir.glob("*.md"))
     if not files:
         raise SystemExit(f"no markdown files in {vocab_dir}")
 
-    by_rank: dict[int, tuple[int, str, str, str]] = {}
+    by_rank: dict[int, Row] = {}
     errors: list[str] = []
 
     for path in files:
@@ -74,18 +80,19 @@ def parse_vocab(vocab_dir: Path) -> list[tuple[int, str, str, str]]:
         word: str | None = None
         meaning: str | None = None
         example: str | None = None
+        example_ko: str | None = None
 
         def flush() -> None:
-            nonlocal rank, word, meaning, example
+            nonlocal rank, word, meaning, example, example_ko
             if rank is None:
                 return
-            if not word or not meaning or not example:
+            if not word or not meaning or not example or not example_ko:
                 errors.append(f"{path.name}: incomplete rank {rank}")
             elif rank in by_rank:
                 errors.append(f"{path.name}: duplicate rank {rank}")
             else:
-                by_rank[rank] = (rank, word, meaning, example)
-            rank = word = meaning = example = None
+                by_rank[rank] = (rank, word, meaning, example, example_ko)
+            rank = word = meaning = example = example_ko = None
 
         for line in path.read_text(encoding="utf-8").splitlines():
             head = HEAD_RE.match(line)
@@ -103,6 +110,10 @@ def parse_vocab(vocab_dir: Path) -> list[tuple[int, str, str, str]]:
             example_match = EXAMPLE_RE.match(line)
             if example_match:
                 example = example_match.group(1).strip()
+                continue
+            example_ko_match = EXAMPLE_KO_RE.match(line)
+            if example_ko_match:
+                example_ko = example_ko_match.group(1).strip()
 
         flush()
 
@@ -116,7 +127,7 @@ def parse_vocab(vocab_dir: Path) -> list[tuple[int, str, str, str]]:
     if got != expected:
         missing = [n for n in expected if n not in by_rank]
         raise SystemExit(f"expected ranks 1-6000, got {len(rows)}; missing {missing[:20]}")
-    empty = [row[0] for row in rows if not row[1] or not row[2] or not row[3]]
+    empty = [row[0] for row in rows if not row[1] or not row[2] or not row[3] or not row[4]]
     if empty:
         raise SystemExit(f"empty fields at ranks {empty[:20]}")
     return rows
@@ -133,14 +144,14 @@ def connect(env: dict[str, str], host: str, port: int) -> psycopg.Connection:
     )
 
 
-def import_rows(conn: psycopg.Connection, rows: list[tuple[int, str, str, str]]) -> None:
+def import_rows(conn: psycopg.Connection, rows: list[Row]) -> None:
     with conn.cursor() as cur:
         cur.execute(DDL)
         cur.executemany(UPSERT, rows)
     conn.commit()
 
 
-def verify(conn: psycopg.Connection, rows: list[tuple[int, str, str, str]]) -> None:
+def verify(conn: psycopg.Connection, rows: list[Row]) -> None:
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) AS n FROM english.word")
         count = cur.fetchone()["n"]
@@ -149,12 +160,17 @@ def verify(conn: psycopg.Connection, rows: list[tuple[int, str, str, str]]) -> N
         cur.execute(
             """
             SELECT COUNT(*) AS n FROM english.word
-            WHERE word = '' OR meaning = '' OR example = ''
+            WHERE word = '' OR meaning = '' OR example = '' OR example_ko = ''
             """
         )
         empty = cur.fetchone()["n"]
         cur.execute(
-            "SELECT rank, word, meaning, example FROM english.word WHERE rank IN (1, 1000, 3001, 6000) ORDER BY rank"
+            """
+            SELECT rank, word, meaning, example, example_ko
+            FROM english.word
+            WHERE rank IN (1, 1000, 3001, 6000)
+            ORDER BY rank
+            """
         )
         samples = cur.fetchall()
 
@@ -165,7 +181,13 @@ def verify(conn: psycopg.Connection, rows: list[tuple[int, str, str, str]]) -> N
     parsed = {row[0]: row for row in rows}
     for sample in samples:
         expected = parsed[sample["rank"]]
-        got = (sample["rank"], sample["word"], sample["meaning"], sample["example"])
+        got = (
+            sample["rank"],
+            sample["word"],
+            sample["meaning"],
+            sample["example"],
+            sample["example_ko"],
+        )
         if got != expected:
             raise SystemExit(f"sample mismatch rank {sample['rank']}: {got!r} != {expected!r}")
         print(f"  ok {sample['rank']}. {sample['word']} / {sample['meaning']}")
