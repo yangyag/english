@@ -6,7 +6,7 @@
 ## 1. 목표
 
 - Nuxt 3 + TypeScript 프론트를 만들어 하루 학습 플로우를 웹에서 쓸 수 있게 한다.
-- EC2 (t3.small)에 nginx(정적, Docker) + FastAPI(호스트 파이썬, 워커 1) 로 배포한다. 포트는 8089.
+- EC2 (t3.small)에 호스트 nginx(443, `yangyag4.duckdns.org`) + 프론트 컨테이너(8089) + FastAPI(호스트 파이썬, `:8090`) 로 배포한다.
 
 ## 2. 현황 (2026-08-26 배포 후)
 
@@ -36,24 +36,30 @@
 ### 운영 토폴로지
 
 ```
-브라우저 ── :8089 ── nginx:alpine (정적 Nuxt, Docker)
-                        └─ /v1 프록시 ── host-gateway:8090
-                                           └─ FastAPI (호스트 파이썬 venv, uvicorn 워커 1, systemd)
-                                                └─ 127.0.0.1:5432 ── auto-postgres (english 스키마)
+브라우저 ── https://yangyag4.duckdns.org (:443)
+              └─ 호스트 nginx (다른 duckdns와 동일)
+                    └─ 127.0.0.1:8089 ── english-front (nginx:alpine, 정적 Nuxt)
+                                            └─ /v1 ── host.docker.internal:8090
+                                                       └─ FastAPI (호스트 venv, systemd, 워커 1)
+                                                            └─ 127.0.0.1:5432 ── auto-postgres
 ```
 
+- 공개 포트는 **443**(및 HTTP 301). 8089는 호스트에서 컨테이너로만 연다. Docker Hub는 쓰지 않는다.
 - **Docker 이미지는 프론트(nginx) 하나만** 만든다. 백엔드는 EC2 호스트에서
   파이썬 venv + systemd 서비스(`english-back.service`)로 돌린다.
-- 백엔드는 `0.0.0.0:8090`. host-gateway(`172.17.0.1`)는 `127.0.0.1`에 닿지 않는다.
+- 백엔드는 `0.0.0.0:8090`. 컨테이너 host-gateway(`172.17.0.1`)는 `127.0.0.1`에 닿지 않는다.
   DB 는 호스트 `127.0.0.1:5432`. `auto_default` 네트워크 연결이나 SSH 터널 불필요.
 - 컨테이너 리소스 제한: nginx `mem_limit 64m`. FastAPI 는 호스트 프로세스라 systemd `MemoryMax=192M`.
-- 프론트 이미지 빌드는 로컬(WSL). EC2에는 `docker save | ssh docker load` 로만 전달.
-- 백엔드 배포는 `rsync` 로 코드 전송 후 `pip install -r requirements.txt` (경량이라 서버 부담 없음).
+- 프론트 이미지 빌드는 로컬 Windows/Linux Docker (`linux/amd64`).
+  `docker save` tar 를 EC2 `~/english/` 로 scp 한 뒤 `docker load`.
+  (EC2 snap Docker는 `/tmp`에서 load 가 실패한다. 파이프 `gzip | ssh docker load` 는 쓰지 않는다.)
+- 백엔드 배포는 `back/` 을 scp/rsync 로 보낸 뒤 `pip install -r requirements.txt` (경량이라 서버 부담 없음).
 
 ### 로컬 개발
 
 - `back`: `.venv` uvicorn 8090.
-- `front`: `nuxt dev` (3000). `nuxt.config.ts` 의 `routeRules`/dev proxy 로 `/v1` 을 `127.0.0.1:8090` 에 프록시.
+- `front`: `nuxt dev` (3000). `nuxt.config.ts` 의 nitro `devProxy` 로 `/v1` 을 `127.0.0.1:8090` 에 프록시.
+- 운영과 같게 보려면 로컬 `english-front` 컨테이너 `:8089` + uvicorn `:8090` + `english-postgres` `:5432`.
 
 ## 4. 화면 설계
 
@@ -62,10 +68,11 @@
 - 진입 시 `GET /v1/today`. `phase` 로 분기:
   - `review`: 어제(마지막) 구간 10장 복습 → 완료 버튼 → `POST /v1/today/review`
   - `new`: 신규 10장 → `POST /v1/today/new`
-  - `done`: 오늘 완료 안내 + 진도 링크
-- 카드 UX: 앞면 단어, 뒷면 뜻+예문. 뒤집고 나서 알아요/몰라요 선택.
+  - `done`: 오늘 완료 안내 + **오늘 더 하기** + 진도 보기 (둘 다 버튼)
+- 카드 UX: 앞면 단어, 뒷면 뜻+예문(+예문 한글은 `example_ko`, 번역 적재는 별도). 뒤집고 나서 알아요/몰라요 선택.
 - 제출은 10장 결과를 모아 **한 번에** POST (구간 순위 전체).
 - `POST /v1/today/new` 409(복습 미완료) 처리: 복습 화면으로 되돌린다.
+- `done` 이후 `GET/POST /v1/today/extra` 로 다음 10개를 더 한다. 다음날 복습은 마지막 10개.
 - 제출 성공 후 `GET /v1/today` 재조회로 phase 갱신.
 
 ### 진도 (`/progress`)
@@ -75,7 +82,7 @@
 ### 공통
 
 - API 응답 타입은 `back/app/schemas.py` 와 1:1로 맞춰 `front/types/api.ts` 에 수동 정의.
-  (`TodayOut`, `WordOut`, `SubmitIn`, `ProgressOut`)
+  (`TodayOut`, `WordOut`, `SubmitIn`, `ProgressOut`). `TodayOut.can_extra`, `WordOut.example_ko` 포함.
 
 ## 5. 마일스톤
 
@@ -87,7 +94,7 @@
 | M2 | ~~API 타입/클라이언트~~ ✅ | `front/types/api.ts` + `useEnglishApi` |
 | M3 | ~~오늘 학습 화면~~ ✅ | 카드 뒤집기, 10장 일괄 제출, 409 시 재조회 |
 | M4 | ~~진도 화면~~ ✅ | `/progress` 수치 표시 |
-| M5 | ~~로컬 통합 검증~~ ✅ | pytest 10 passed, nginx `:8089` → FastAPI `:8090` |
+| M5 | ~~로컬 통합 검증~~ ✅ | pytest 통과, nginx `:8089` → FastAPI `:8090` |
 | M6 | ~~프론트 이미지 빌드~~ ✅ | `english-front:1.0` linux/amd64 |
 | M7 | ~~EC2 배포~~ ✅ | `english-front` 8089, `english-back.service`, DB 6,000 |
 | M8 | ~~운영 점검~~ ✅ | `/v1/health`, 메모리, 로그, README |
@@ -96,28 +103,30 @@
 
 ### 프론트 (Docker)
 
-1. 로컬: `nuxt generate` → `.output/public` 을 nginx:alpine 이미지에 COPY.
-2. `docker save english-front | gzip | ssh ... docker load` 로 전달.
-3. EC2: `~/english/docker-compose.yml` (서비스 front 하나, 8089 공개, `mem_limit 64m`).
-   - 컨테이너에서 호스트의 FastAPI 를 찍기 위해 `extra_hosts: host.docker.internal:host-gateway`.
-   - nginx 설정: `/v1` → `proxy_pass http://host.docker.internal:8090` (no-cache), 나머지 정적.
+1. 로컬: `nuxt generate` → `.output/public` 을 nginx:alpine 이미지에 COPY. 태그 `english-front:1.0`, `--platform linux/amd64`.
+2. `docker save` 로 tar 를 만들고 EC2 `~/english/english-front-1.0.tar` 로 scp.
+3. EC2: `docker load` 후 `~/english/docker-compose.yml` (`english-front`, 8089 공개, `mem_limit 64m`).
+   - `extra_hosts: host.docker.internal:host-gateway`.
+   - 컨테이너 nginx: `/v1` → `proxy_pass http://host.docker.internal:8090` (no-cache), 나머지 정적.
+4. 호스트 nginx `yangyag4.duckdns.org` → `127.0.0.1:8089`. HTTPS는 certbot. 설정은 `deploy/nginx-yangyag4-english.conf`.
+   명령 전문은 README 「프론트 이미지 배포」.
 
 ### 백엔드 (호스트 파이썬, Docker 아님)
 
-1. `rsync` 로 `back/` 을 EC2 `~/english/back` 으로 전송.
+1. `back/` 을 EC2 `~/english/back` 으로 scp/rsync.
 2. EC2: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
    (의존성이 가벼워 서버 부담 없음. 빌드 없는 순수 설치.)
 3. systemd 유닛 `english-back.service`:
    - `ExecStart=.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8090 --workers 1`
    - `EnvironmentFile=/home/ubuntu/english/.env` (DB 접속은 `127.0.0.1:5432`)
    - `MemoryMax=192M`, `Restart=always`, 서버 재부팅 시 자동 기동(`enable`).
-4. 검증: `curl 10.66.66.1:8089/`, `curl :8089/v1/today`, `curl :8089/v1/health`, `systemctl status english-back`.
-   snap docker는 `/tmp`에서 `docker load`가 실패하므로 이미지는 홈 디렉터리로 넣는다.
+4. 검증: `curl https://yangyag4.duckdns.org/`, `curl https://yangyag4.duckdns.org/v1/today`,
+   `curl https://yangyag4.duckdns.org/v1/health`, `systemctl status english-back`.
 
 ### 롤백
 
 - 프론트: 이전 이미지 태그(`english-front:이전`) 를 남겨두고 compose 태그만 바꿔 재생성.
-- 백엔드: rsync 전 `~/english/back` 을 `back.bak` 으로 복사해두고 되돌린 뒤 서비스 재시작.
+- 백엔드: 덮어쓰기 전 `~/english/back` 을 `back.bak` 으로 복사해두고 되돌린 뒤 서비스 재시작.
 
 ## 7. 리스크와 대응
 
