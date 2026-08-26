@@ -1,7 +1,7 @@
 # 프론트 · 배포 계획서
 
 작성일: 2026-08-26 (AGENTS.md 기준)
-상태: 승인 대기. 이 문서의 마일스톤 순서대로 진행한다.
+상태: 진행 중. M1 완료(2026-08-26). 다음은 M2(API 타입/클라이언트).
 
 ## 1. 목표
 
@@ -83,7 +83,7 @@
 
 | # | 작업 | 완료 기준 |
 |---|------|-----------|
-| M1 | Nuxt 스캐폴딩 (`front/`) | `npm run generate` 성공, `ssr:false`, dev proxy 동작 |
+| M1 | ~~Nuxt 스캐폴딩 (`front/`)~~ ✅ | `npm run generate` 성공, `ssr:false`, dev proxy 동작 — Nuxt 3.21.11 |
 | M2 | API 타입/클라이언트 | `types/api.ts` + composables, 목업 없이 실제 API 타입 일치 |
 | M3 | 오늘 학습 화면 | review→new→done 전 구간 수동 통과 |
 | M4 | 진도 화면 | progress 수치 표시 |
