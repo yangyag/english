@@ -158,13 +158,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <button
             v-if="today.can_extra"
             type="button"
-            class="primary"
+            class="btn primary"
             :disabled="loading"
             @click="startExtra"
           >
             오늘 더 하기
           </button>
-          <NuxtLink class="link" to="/progress">진도 보기</NuxtLink>
+          <NuxtLink class="btn ghost" to="/progress">진도 보기</NuxtLink>
         </div>
       </div>
     </template>
@@ -222,11 +222,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .done { padding: 24px 8px 8px; text-align: center; }
 .done-title { margin: 0 0 8px; font-size: 1.25rem; font-weight: 700; }
 .done-copy { margin: 0 0 20px; color: #5b5348; line-height: 1.5; }
-.link {
-  color: #1e2a24;
-  font-weight: 700;
-  align-self: center;
-}
 .dots {
   display: flex;
   gap: 6px;
@@ -259,12 +254,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   flex-wrap: wrap;
   min-width: 0;
 }
-button {
+button, .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border: 0;
   border-radius: 999px;
   padding: 12px 18px;
   font: inherit;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
 }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
