@@ -9,6 +9,32 @@ const props = defineProps<{
 const emit = defineEmits<{
   flip: []
 }>()
+
+type Chunk = { text: string; hit: boolean }
+
+const exampleChunks = computed<Chunk[]>(() => {
+  const example = props.word.example
+  const needle = props.word.word.trim()
+  if (!needle) return [{ text: example, hit: false }]
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`\\b(${escaped})\\b`, 'gi')
+  const chunks: Chunk[] = []
+  let last = 0
+  let match = re.exec(example)
+  while (match) {
+    if (match.index > last) {
+      chunks.push({ text: example.slice(last, match.index), hit: false })
+    }
+    chunks.push({ text: match[0], hit: true })
+    last = match.index + match[0].length
+    if (match[0].length === 0) re.lastIndex += 1
+    match = re.exec(example)
+  }
+  if (last < example.length) {
+    chunks.push({ text: example.slice(last), hit: false })
+  }
+  return chunks.length ? chunks : [{ text: example, hit: false }]
+})
 </script>
 
 <template>
@@ -30,7 +56,11 @@ const emit = defineEmits<{
         <span class="rank">{{ props.word.rank }}</span>
         <p class="term small">{{ props.word.word }}</p>
         <p class="meaning">{{ props.word.meaning }}</p>
-        <p class="example">{{ props.word.example }}</p>
+        <p class="example">
+          <template v-for="(chunk, i) in exampleChunks" :key="i">
+            <mark v-if="chunk.hit" class="hit">{{ chunk.text }}</mark><template v-else>{{ chunk.text }}</template>
+          </template>
+        </p>
       </div>
     </div>
   </button>
@@ -122,6 +152,15 @@ const emit = defineEmits<{
   line-height: 1.55;
   text-align: center;
   color: #5b5348;
+  font-style: italic;
+}
+.hit {
+  margin: 0;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #f3d2b3;
+  color: #9b2c22;
+  font-weight: 700;
   font-style: italic;
 }
 </style>
