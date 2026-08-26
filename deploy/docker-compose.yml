@@ -1,0 +1,15 @@
+services:
+  front:
+    image: english-front:1.0
+    container_name: english-front
+    ports:
+      - "8089:80"
+    mem_limit: 64m
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
+      interval: 30s
+      timeout: 3s
+      retries: 3

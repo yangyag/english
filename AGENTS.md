@@ -9,7 +9,8 @@
 ## 레이아웃
 
 - `back/` FastAPI. 앱 코드는 `back/app`, 테스트는 `back/tests`.
-- `front/` Nuxt 3 + TypeScript (아직 없음). React/Next 쓰지 않는다.
+- `front/` Nuxt 3 + TypeScript. React/Next 쓰지 않는다.
+- `deploy/` EC2 compose와 systemd 유닛.
 - `vocab/` 생성된 마크다운. `english.word` 의 원본.
 - `words/` PDF 원본.
 - `scripts/import_words.py` 1회성 import. 학습 경로에서 PDF/MD를 읽지 않는다.
@@ -26,7 +27,7 @@
 - 스키마/테이블은 `english`. SQLAlchemy 모델과 어긋나게 raw SQL 테이블을 만들지 않는다.
 - 설정은 저장소 루트 `.env`. 키 목록은 `.env_sample`. 비밀번호를 문서나 샘플에 쓰지 않는다.
 
-## 프론트 (예정)
+## 프론트
 
 - Nuxt 3 + TypeScript, 폴더 `front/`. SSR 없이 정적 생성(`ssr: false`, `nuxt generate`)으로만 배포한다.
 - 화면은 오늘 학습과 진도 두 개면 충분하다.
@@ -42,7 +43,7 @@
 - 프론트는 nginx 이미지로 만든다. 빌드는 로컬에서만 하고 EC2에는 `docker load` 로 올린다.
 - 백엔드는 Docker에 넣지 않는다. EC2 호스트에서 파이썬 venv + systemd(`english-back.service`)로 uvicorn 워커 1개를 돌린다.
 - 런타임은 nginx 컨테이너(정적 Nuxt, `mem_limit 64m`) + 호스트 파이썬 FastAPI 워커 1개뿐이다. Redis, 큐, Node 서버 없음. Nuxt SSR 서버도 띄우지 않는다.
-- FastAPI는 `127.0.0.1:8000` 에만 바인딩하고 nginx 컨테이너가 `/v1` 을 프록시한다. DB는 호스트 `127.0.0.1:5432` 로 접속한다.
+- FastAPI는 `0.0.0.0:8000` (nginx host-gateway 접근용). 브라우저 진입은 nginx `8089`. DB는 호스트 `127.0.0.1:5432`.
 - EC2 Postgres는 `127.0.0.1:5432` 만 연다. 원격 import는 `scripts/import_words.py --ec2` (SSH 터널).
 
 ## Git

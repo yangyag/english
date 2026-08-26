@@ -1,27 +1,27 @@
 # 프론트 · 배포 계획서
 
 작성일: 2026-08-26 (AGENTS.md 기준)
-상태: 진행 중. M1 완료(2026-08-26). 다음은 M2(API 타입/클라이언트).
+상태: M1–M8 완료(2026-08-26). 앱은 WireGuard `http://10.66.66.1:8089`.
 
 ## 1. 목표
 
 - Nuxt 3 + TypeScript 프론트를 만들어 하루 학습 플로우를 웹에서 쓸 수 있게 한다.
 - EC2 (t3.small)에 nginx(정적, Docker) + FastAPI(호스트 파이썬, 워커 1) 로 배포한다. 포트는 8089.
 
-## 2. 현황 (2026-02 실측)
+## 2. 현황 (2026-08-26 배포 후)
 
 ### EC2 (`43.202.113.123`, t3.small 2GiB)
 
-- 가용 RAM 약 670Mi, swap 928Mi 사용 중. 디스크 `/` 잔여 5.0Gi.
-- 실행 컨테이너 7개: video-api/worker/frontend, kafka, llm-front/back, auto-postgres.
+- 가용 RAM 약 789Mi, swap 1.0Gi 사용 중. 디스크 `/` 잔여 5.0Gi.
+- 기존 컨테이너 7개 + `english-front` (3.4Mi / 64Mi). FastAPI RSS 약 70Mi / 192Mi.
 - `auto-postgres` 는 `auto_default` 네트워크에 있고 별칭 `postgres` 로 접근 가능.
   호스트에는 `127.0.0.1:5432` 만 공개.
-- 8083–8088 사용 중(8084/8085 제외 일부 혼재), **8089 비어 있음**.
+- **8089** = `english-front`. 공인 IP로는 타임아웃, WireGuard `10.66.66.1:8089` 는 200.
 
 ### 저장소
 
 - 백엔드 완료: FastAPI + 테스트 통과, 단어 6,000개 로컬/EC2 import 완료.
-- 프론트 없음(`front/` 미생성), Dockerfile/compose 없음.
+- 프론트: Nuxt 3 정적 생성, `front/Dockerfile` (nginx), `deploy/`.
 - `.env`, `aws/test-keypair.pem` 로컬에 있음(둘 다 `.gitignore` 커버 확인).
 
 ## 3. 아키텍처 결정
@@ -44,8 +44,8 @@
 
 - **Docker 이미지는 프론트(nginx) 하나만** 만든다. 백엔드는 EC2 호스트에서
   파이썬 venv + systemd 서비스(`english-back.service`)로 돌린다.
-- 백엔드는 `127.0.0.1:8000` 에만 바인딩. DB 는 이미 호스트에 공개된 `127.0.0.1:5432` 로 접속.
-  `auto_default` 네트워크 연결이나 SSH 터널 불필요.
+- 백엔드는 `0.0.0.0:8000`. host-gateway(`172.17.0.1`)는 `127.0.0.1`에 닿지 않는다.
+  DB 는 호스트 `127.0.0.1:5432`. `auto_default` 네트워크 연결이나 SSH 터널 불필요.
 - 컨테이너 리소스 제한: nginx `mem_limit 64m`. FastAPI 는 호스트 프로세스라 systemd `MemoryMax=192M`.
 - 프론트 이미지 빌드는 로컬(WSL). EC2에는 `docker save | ssh docker load` 로만 전달.
 - 백엔드 배포는 `rsync` 로 코드 전송 후 `pip install -r requirements.txt` (경량이라 서버 부담 없음).
@@ -84,13 +84,13 @@
 | # | 작업 | 완료 기준 |
 |---|------|-----------|
 | M1 | ~~Nuxt 스캐폴딩 (`front/`)~~ ✅ | `npm run generate` 성공, `ssr:false`, dev proxy 동작 — Nuxt 3.21.11 |
-| M2 | API 타입/클라이언트 | `types/api.ts` + composables, 목업 없이 실제 API 타입 일치 |
-| M3 | 오늘 학습 화면 | review→new→done 전 구간 수동 통과 |
-| M4 | 진도 화면 | progress 수치 표시 |
-| M5 | 로컬 통합 검증 | `back` pytest 통과 + 프론트-백 실제 연동 시나리오 점검 |
-| M6 | 프론트 이미지 빌드 | `front/Dockerfile`(nginx) 로컬 빌드 성공. 백은 이미지화하지 않음 |
-| M7 | EC2 배포 | nginx 컨테이너 8089 응답, 백 systemd 기동, DB 연결 확인 |
-| M8 | 운영 점검 | 헬스체크, 메모리/스왑 추이, 로그 확인, README 갱신 |
+| M2 | ~~API 타입/클라이언트~~ ✅ | `front/types/api.ts` + `useEnglishApi` |
+| M3 | ~~오늘 학습 화면~~ ✅ | 카드 뒤집기, 10장 일괄 제출, 409 시 재조회 |
+| M4 | ~~진도 화면~~ ✅ | `/progress` 수치 표시 |
+| M5 | ~~로컬 통합 검증~~ ✅ | pytest 10 passed, nginx `:8089` → FastAPI `:8000` |
+| M6 | ~~프론트 이미지 빌드~~ ✅ | `english-front:1.0` linux/amd64 |
+| M7 | ~~EC2 배포~~ ✅ | `english-front` 8089, `english-back.service`, DB 6,000 |
+| M8 | ~~운영 점검~~ ✅ | `/v1/health`, 메모리, 로그, README |
 
 ## 6. 배포 상세 (M6–M7)
 
@@ -108,10 +108,11 @@
 2. EC2: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
    (의존성이 가벼워 서버 부담 없음. 빌드 없는 순수 설치.)
 3. systemd 유닛 `english-back.service`:
-   - `ExecStart=.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1`
-   - `EnvironmentFile=/home/ubuntu/english/back/.env` (DB 접속은 `127.0.0.1:5432`)
+   - `ExecStart=.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1`
+   - `EnvironmentFile=/home/ubuntu/english/.env` (DB 접속은 `127.0.0.1:5432`)
    - `MemoryMax=192M`, `Restart=always`, 서버 재부팅 시 자동 기동(`enable`).
-4. 검증: `curl :8089/`, `curl :8089/v1/today`, `systemctl status english-back`.
+4. 검증: `curl 10.66.66.1:8089/`, `curl :8089/v1/today`, `curl :8089/v1/health`, `systemctl status english-back`.
+   snap docker는 `/tmp`에서 `docker load`가 실패하므로 이미지는 홈 디렉터리로 넣는다.
 
 ### 롤백
 

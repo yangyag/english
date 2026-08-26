@@ -11,11 +11,8 @@
 - PDF → `vocab/*.md` (뜻 + 예문, 순위 1–6000)
 - Postgres `app.english` 스키마, 로컬과 EC2 모두 단어 6,000개 import
 - FastAPI 백엔드 (`back/`)와 API 테스트
-
-아직인 것:
-
-- Nuxt 프론트 (`front/`)
-- EC2 Docker 배포 (호스트 포트는 8089가 비어 있음)
+- Nuxt 프론트 (`front/`, 오늘 학습 + 진도)
+- EC2 배포: nginx `english-front` `:8089` + systemd `english-back` `:8000`
 
 ## 구성
 
@@ -24,6 +21,8 @@ words/      원본 PDF
 vocab/      단어 마크다운 (50개씩, 120파일)
 data/       PDF에서 뽑은 rank/word JSON
 back/       FastAPI
+front/      Nuxt 3 (정적 생성)
+deploy/     EC2 docker-compose, systemd 유닛
 scripts/    PDF 추출, DB import
 aws/        EC2 SSH (connect.ps1 / connect.sh)
 ```
@@ -42,6 +41,7 @@ aws/        EC2 SSH (connect.ps1 / connect.sh)
 
 | 메서드 | 경로 | 역할 |
 |--------|------|------|
+| `GET` | `/v1/health` | DB ping |
 | `GET` | `/v1/today` | 오늘 복습/신규 목록 |
 | `POST` | `/v1/today/review` | 복습 10개 한 번에 제출 |
 | `POST` | `/v1/today/new` | 신규 10개 한 번에 제출 |
@@ -62,10 +62,12 @@ Postgres. DB `app`, 스키마 `english`.
 
 환경 변수 키는 `.env_sample` 을 복사해 `.env` 로 쓴다. `.env` 와 PEM은 git에 넣지 않는다.
 
-로컬 Postgres는 WSL Docker `postgres17` (`127.0.0.1:5432`).  
+로컬 Postgres는 Docker `english-postgres` (`127.0.0.1:5432`).  
 EC2 Postgres는 `auto-postgres` 이고 `127.0.0.1:5432` 만 열려 있다. 바깥에서 붙을 때는 SSH 터널이 필요하다.
 
 ## 로컬 실행
+
+백엔드:
 
 ```powershell
 copy .env_sample .env
@@ -75,6 +77,16 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
+
+프론트 (`/v1` 은 8000으로 프록시):
+
+```powershell
+cd front
+npm install
+npm run dev
+```
+
+브라우저: `http://127.0.0.1:3000`
 
 단어 import (이미 넣었으면 같은 rank는 덮어쓴다):
 
@@ -97,3 +109,8 @@ EC2 SSH:
 - 이 서버에서 `npm run build` / `docker build` 하지 않는다. 프론트 이미지는 로컬에서 만들어 올리고, 백엔드는 호스트 파이썬(venv + systemd)으로 돌린다.
 - 프론트는 Nuxt 3 + TypeScript. SSR 없이 정적 생성으로 배포한다. 로컬에서 빌드한 nginx 이미지(Docker)를 올린다.
 - 백엔드는 Docker 없이 EC2 호스트 파이썬(venv + systemd)로 uvicorn 워커 1개를 돌린다.
+- 앱 URL: WireGuard `http://10.66.66.1:8089` (공인 IP 8089는 보안그룹에서 막혀 있음).
+- nginx 컨테이너 `english-front` (`mem_limit 64m`, 호스트 8089). FastAPI `english-back.service` (`MemoryMax=192M`, `:8000`).
+- host-gateway가 `127.0.0.1`에 닿지 않아 FastAPI는 `0.0.0.0:8000`에 연다. 화면은 8089만 쓴다.
+- 프론트 이미지 전달: 로컬에서 `docker save` 후 홈 디렉터리로 scp (`snap docker`는 `/tmp` 로드가 안 됨).
+- 헬스: `GET /v1/health`. 재기동 확인은 `systemctl status english-back`, `docker compose -f ~/english/docker-compose.yml ps`.

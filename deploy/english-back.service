@@ -1,0 +1,17 @@
+[Unit]
+Description=english FastAPI
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/english/back
+EnvironmentFile=/home/ubuntu/english/.env
+# host-gateway(172.17.0.1)는 127.0.0.1 에 닿지 않아 0.0.0.0 에 연다. 앱 진입은 8089.
+ExecStart=/home/ubuntu/english/back/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+MemoryMax=192M
+
+[Install]
+WantedBy=multi-user.target
