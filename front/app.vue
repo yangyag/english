@@ -12,21 +12,27 @@
 
 <style>
 * { box-sizing: border-box; }
+html, body { min-height: 100%; }
 body {
   margin: 0;
   font-family: 'Pretendard', -apple-system, 'Segoe UI', Roboto, sans-serif;
-  background: #f6f7fb;
-  color: #1f2430;
+  background: #f3efe4;
+  color: #1c1914;
 }
-.app { max-width: 640px; margin: 0 auto; padding: 16px; }
+.app { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
 .nav {
   display: flex;
   gap: 16px;
   padding: 12px 0;
   margin-bottom: 16px;
-  border-bottom: 1px solid #e3e6ee;
+  border-bottom: 1px solid #e4dccb;
 }
-.nav a { text-decoration: none; color: #55607a; font-weight: 600; }
-.nav a.router-link-active { color: #2f6fed; }
-.main { background: #fff; border-radius: 12px; padding: 20px; }
+.nav a { text-decoration: none; color: #6b6258; font-weight: 700; }
+.nav a.router-link-active { color: #1e2a24; }
+.main {
+  background: #fffaf1;
+  border: 1px solid #e4dccb;
+  border-radius: 16px;
+  padding: 20px;
+}
 </style>

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db
-from app.routers import progress, today
+from app.routers import health, progress, today
 
 
 @asynccontextmanager
@@ -20,5 +20,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(health.router, prefix="/v1")
 app.include_router(today.router, prefix="/v1")
 app.include_router(progress.router, prefix="/v1")
