@@ -1,5 +1,9 @@
 # dependencies
 node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
 .pnp
 .pnp.js
 
@@ -11,10 +15,12 @@ out/
 .turbo/
 .vercel/
 
-# env
+# env / secrets
 .env
 .env.*
 !.env.example
+*.pem
+aws/*.pem
 
 # logs / cache
 *.log
