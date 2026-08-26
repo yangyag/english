@@ -112,5 +112,57 @@ EC2 SSH:
 - 앱 URL: `https://yangyag4.duckdns.org` (호스트 nginx → `127.0.0.1:8089`). HTTP는 HTTPS로 301.
 - nginx 컨테이너 `english-front` (`mem_limit 64m`, 호스트 8089). FastAPI `english-back.service` (`MemoryMax=192M`, `:8090`).
 - host-gateway가 `127.0.0.1`에 닿지 않아 FastAPI는 `0.0.0.0:8090`에 연다. 화면은 8089만 쓴다.
-- 프론트 이미지 전달: 로컬에서 `docker save` 후 홈 디렉터리로 scp (`snap docker`는 `/tmp` 로드가 안 됨).
+- 프론트 이미지는 Docker Hub에 올리지 않는다. 로컬에서 빌드한 뒤 tar로 EC2에 넣어 `docker load` 한다.
 - 헬스: `GET /v1/health`. 재기동 확인은 `systemctl status english-back`, `docker compose -f ~/english/docker-compose.yml ps`.
+
+## 프론트 이미지 배포
+
+레지스트리를 쓰지 않는다. EC2에서 `docker build` 하지 않는다.
+
+1. 로컬: `nuxt generate` → `english-front:1.0` 이미지 빌드 (`linux/amd64`)
+2. `docker save` 로 tar 작성
+3. EC2 `~/english/` 로 scp (홈 디렉터리. snap Docker는 `/tmp` 에서 `docker load` 가 실패한다)
+4. EC2: `docker load` 후 `docker compose up -d --force-recreate`
+
+호스트는 `ubuntu@43.202.113.123`, 키는 `aws/test-keypair.pem`.
+
+### PowerShell
+
+```powershell
+cd front
+npm install
+npx nuxi generate
+docker build --platform linux/amd64 -t english-front:1.0 .
+docker save english-front:1.0 -o $env:TEMP\english-front-1.0.tar
+
+$key = ".\aws\test-keypair.pem"
+icacls $key /inheritance:r | Out-Null
+icacls $key /grant:r "$($env:USERNAME):R" | Out-Null
+
+scp -i $key -o StrictHostKeyChecking=accept-new `
+  $env:TEMP\english-front-1.0.tar `
+  ubuntu@43.202.113.123:/home/ubuntu/english/english-front-1.0.tar
+
+.\aws\connect.ps1 "docker load -i /home/ubuntu/english/english-front-1.0.tar; rm -f /home/ubuntu/english/english-front-1.0.tar; cd /home/ubuntu/english; docker compose up -d --force-recreate"
+```
+
+PEM 권한은 `.\aws\connect.ps1` 이 잡아 주므로, scp 전에 한 번 접속해 둬도 된다.
+
+### Linux
+
+```bash
+cd front
+npm install
+npx nuxi generate
+docker build --platform linux/amd64 -t english-front:1.0 .
+docker save english-front:1.0 -o /tmp/english-front-1.0.tar
+
+chmod 600 aws/test-keypair.pem
+scp -i aws/test-keypair.pem -o StrictHostKeyChecking=accept-new \
+  /tmp/english-front-1.0.tar \
+  ubuntu@43.202.113.123:/home/ubuntu/english/english-front-1.0.tar
+
+./aws/connect.sh "docker load -i /home/ubuntu/english/english-front-1.0.tar; rm -f /home/ubuntu/english/english-front-1.0.tar; cd /home/ubuntu/english; docker compose up -d --force-recreate"
+```
+
+로컬 `/tmp` 에 tar 를 두는 것은 괜찮다. 막히는 쪽은 EC2 snap Docker 가 `/tmp` 를 읽는 것이다.
