@@ -13,11 +13,12 @@ from test_today import payload
 
 
 @pytest.mark.parametrize('same_id', [True, False])
-def test_simultaneous_submissions_commit_once(same_id):
+@pytest.mark.parametrize('count', [1, 10])
+def test_simultaneous_submissions_commit_once(same_id, count):
     with SessionLocal.begin() as db:
         db.add_all([Word(rank=i, word=str(i), meaning='test', example='test', example_ko='test') for i in range(1, 21)])
-    first = payload()
-    bodies = [first, first if same_id else payload()]
+    first = payload(1, count, known=None)
+    bodies = [first, first if same_id else payload(1, count, known=None)]
     barrier = Barrier(2)
     def run(body):
         try:
@@ -32,7 +33,7 @@ def test_simultaneous_submissions_commit_once(same_id):
             statuses = sorted(pool.map(run, bodies))
         assert statuses == ([200, 200] if same_id else [200, 409])
         with SessionLocal() as db:
-            assert db.get(StudyState, 1).next_rank == 11
+            assert db.get(StudyState, 1).next_rank == count + 1
             assert db.scalar(select(func.count()).select_from(StudyBatch)) == 1
     finally:
         # This database is freshly created by conftest for this test run only.

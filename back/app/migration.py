@@ -12,6 +12,13 @@ def lock_study(db: Session) -> None:
     db.execute(text("SELECT pg_advisory_xact_lock(714205, 1)"))
 
 
+def migrate_result_schema(db: Session) -> None:
+    """Allow unassessed new learning, preserving every existing answer."""
+    lock_study(db)
+    table = db.get_bind().dialect.identifier_preparer.format_table(BatchResult.__table__)
+    db.execute(text(f"ALTER TABLE {table} ALTER COLUMN known DROP NOT NULL"))
+
+
 def migrate_legacy(db: Session) -> int:
     lock_study(db)
     groups = defaultdict(list)

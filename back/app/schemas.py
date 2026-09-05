@@ -23,7 +23,7 @@ class TodayOut(BaseModel):
 
 class WordResultIn(BaseModel):
     rank: int = Field(gt=0)
-    known: bool
+    known: bool | None = None
 
 
 class SubmitIn(BaseModel):

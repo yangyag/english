@@ -1,7 +1,23 @@
 from datetime import date, datetime, timezone
-from sqlalchemy import func, select
-from app.migration import migrate_legacy
+from sqlalchemy import func, select, text
+from app.migration import migrate_legacy, migrate_result_schema
 from app.models import BatchResult, StudyBatch, StudySession, StudyState, WordResult
+
+
+def test_nullable_assessment_upgrade_preserves_existing_answers(client, db):
+    batch = StudyBatch(request_id='old-batch', fingerprint='old', study_date=date(2026, 7, 1),
+                       kind='new', completed_at=datetime(2026, 7, 1, tzinfo=timezone.utc))
+    db.add(batch)
+    db.flush()
+    db.add_all([BatchResult(batch_id=batch.id, rank=1, known=True),
+                BatchResult(batch_id=batch.id, rank=2, known=False)])
+    db.flush()
+    db.execute(text('ALTER TABLE english.batch_result ALTER COLUMN known SET NOT NULL'))
+    migrate_result_schema(db)
+    migrate_result_schema(db)
+    db.add(BatchResult(batch_id=batch.id, rank=3, known=None))
+    db.flush()
+    assert list(db.scalars(select(BatchResult.known).order_by(BatchResult.rank))) == [True, False, None]
 
 
 def test_legacy_import_preserves_dates_answers_and_cursor(client, db):

@@ -55,25 +55,30 @@ def submit(db: Session, today: date, body: SubmitIn, kind: str) -> TodayOut:
             raise HTTPException(400, "신규 학습에는 복습 날짜를 지정하지 않습니다.")
         expected = [word.rank for word in _new_words(db)]
     else:
+        if any(item.known is None for item in body.results):
+            raise HTTPException(400, "복습에는 기억 여부가 필요합니다.")
         source, _, remaining = _review(db, today)
         if source is None or source != body.source_date:
             raise HTTPException(409, "복습 대상이 바뀌었습니다. 학습을 다시 열어 주세요.")
         expected = remaining[:BATCH_SIZE]
     if not expected:
         raise HTTPException(409, "제출할 단어가 없습니다. 기록을 확인해 주세요.")
-    if sorted(item.rank for item in body.results) != expected:
-        raise HTTPException(409, "학습 목록이 바뀌었거나 응답이 빠졌습니다. 학습을 다시 열어 주세요.")
+    # Accept the next consecutive prefix; old clients may still send ten.
+    submitted = sorted(item.rank for item in body.results)
+    if submitted != expected[:len(submitted)]:
+        raise HTTPException(409, "학습 목록이 바뀌었거나 순서가 맞지 않습니다. 학습을 다시 열어 주세요.")
     batch = StudyBatch(request_id=str(body.request_id), fingerprint=fingerprint, study_date=today,
                        kind=kind, source_date=body.source_date, completed_at=datetime.now(KST))
     db.add(batch)
     db.flush()
-    db.add_all([BatchResult(batch_id=batch.id, rank=r.rank, known=r.known) for r in body.results])
+    db.add_all([BatchResult(batch_id=batch.id, rank=r.rank, known=r.known if kind == "review" else None)
+                for r in body.results])
     if kind == "new":
         state = db.get(StudyState, 1)
         if state is None:
             state = StudyState(id=1)
             db.add(state)
-        state.next_rank = expected[-1] + 1
+        state.next_rank = submitted[-1] + 1
         state.last_study_date = today
     db.flush()
     return today_payload(db, today)

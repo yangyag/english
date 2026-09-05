@@ -81,4 +81,4 @@ class BatchResult(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     batch_id: Mapped[int] = mapped_column(ForeignKey(f"{SCHEMA}.study_batch.id"), index=True)
     rank: Mapped[int] = mapped_column(ForeignKey(f"{SCHEMA}.word.rank"), index=True)
-    known: Mapped[bool] = mapped_column(Boolean)
+    known: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

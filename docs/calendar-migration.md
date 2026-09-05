@@ -2,6 +2,10 @@
 
 ## 저장 방식
 
+2026-09-06 한 단어 저장 변경: `init_db`는 기존 기록 이전 전에 `migrate_result_schema`를 실행하여 `batch_result.known`의 NOT NULL 제약만 해제한다. 신규 제출은 NULL(평가 없음), 복습은 true/false를 저장한다. 기존 신규·복습 응답과 `word_result` 원본은 변경하지 않는다. 새 테이블을 추가하지 않으며 반복 실행해도 결과는 같다. 과거 신규 응답을 기억률 분석에 섞지 않도록 종류를 필터링한다.
+
+한 단어 버전 전환 시 백엔드를 먼저 갱신한다. API는 구 프론트의 10개 제출도 받아 신규 평가는 NULL로 저장한다. 새 프론트의 임시 저장 키는 `english-study-draft-v3`이며 구 `v2` 미제출 묶음은 자동 제출하지 않고 다시 시작하도록 안내한다. 구 임시 데이터는 삭제하지 않는다. 새 NULL 기록을 지원하지 않는 이전 코드로 단순 복구하지 않는다.
+
 기존 `word`, `study_state`, `study_session`, `word_result`는 삭제하거나 재작성하지 않는다. SQLAlchemy `Base.metadata.create_all`이 `english.study_batch`, `english.batch_result`만 추가한다. `init_db`는 이후 하나의 트랜잭션에서 `migrate_legacy`를 실행한다. 실제 운영 실행은 이번 로컬 작업에 포함하지 않았다.
 
 기존 응답을 세션·종류·실제 `studied_at`의 Asia/Seoul 날짜로 묶는다. `legacy:<session_id>:<kind>:<date>` 유일 키로 기존 그룹을 찾고 아직 없는 순위만 추가한다. 이전 직후 구 버전으로 복구하여 같은 날 추가 학습한 뒤 다시 전환해도 누락하지 않는다. 신규 첫 묶음만 들어 있는 `new_from_rank/new_to_rank`를 이용해 추가 학습 기록을 누락시키지 않는다. 조회만 하고 제출하지 않은 세션은 달력에 표시하지 않는다. 시간대가 없는 비정상 timestamp는 추측하지 않고 실패한다.

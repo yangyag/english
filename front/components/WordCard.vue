@@ -4,6 +4,7 @@ import type { WordOut } from '~/types/api'
 const props = defineProps<{
   word: WordOut
   flipped: boolean
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -41,6 +42,7 @@ const exampleChunks = computed<Chunk[]>(() => {
   <button
     class="card"
     type="button"
+    :disabled="props.disabled"
     :aria-pressed="props.flipped"
     :aria-label="props.flipped ? '카드 앞면으로' : '카드 뒤집기'"
     @click="emit('flip')"

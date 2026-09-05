@@ -15,9 +15,9 @@ const submitting = ref(false)
 const flipped = ref(false)
 type Draft = { kind: 'new' | 'review'; words: WordOut[]; body: SubmitIn }
 const draft = ref<Draft | null>(null)
-const storageKey = 'english-study-draft-v2'
-const current = computed(() => draft.value?.words[draft.value.body.results.length])
-const ready = computed(() => !!draft.value && draft.value.body.results.length === draft.value.words.length)
+const storageKey = 'english-study-draft-v3'
+const current = computed(() => draft.value?.words[0])
+const pending = computed(() => !!draft.value?.body.results.length)
 const monthTitle = computed(() => month.value ? `${month.value.slice(0, 4)}년 ${Number(month.value.slice(5))}월` : '')
 const days = computed(() => {
   if (!month.value) return []
@@ -55,7 +55,7 @@ function moveMonth(delta: number) {
 }
 function persist() {
   try { if (draft.value) localStorage.setItem(storageKey, JSON.stringify(draft.value)); else localStorage.removeItem(storageKey) }
-  catch { notice.value = '이 브라우저에서는 임시 저장을 사용할 수 없습니다. 제출 전에는 화면을 유지해 주세요.' }
+  catch { notice.value = '이 브라우저에서는 임시 저장을 사용할 수 없습니다. 저장이 확인될 때까지 화면을 유지해 주세요.' }
 }
 async function load() {
   loading.value = true; error.value = ''
@@ -71,32 +71,46 @@ async function start(kind: 'new' | 'review') {
   error.value = ''; notice.value = ''
   try {
     today.value = await api.getToday()
-    const words = today.value[kind]
+    const words = today.value[kind].slice(0, 1)
     if (!words.length) { notice.value = '이 학습은 모두 완료했어요.'; return }
     draft.value = { kind, words, body: { request_id: crypto.randomUUID(), study_date: today.value.date,
       source_date: kind === 'review' ? today.value.review_source_date : null, results: [] } }
     flipped.value = false; persist()
   } catch (e) { error.value = (e as Error).message }
 }
-function mark(known: boolean) {
-  if (!draft.value || !current.value || !flipped.value || submitting.value) return
-  draft.value.body.results.push({ rank: current.value.rank, known }); flipped.value = false; persist()
+async function mark(known: boolean | null) {
+  if (!draft.value || !current.value || !flipped.value || submitting.value || pending.value) return
+  draft.value.body.results = [{ rank: current.value.rank, known }]
+  persist()
+  await submit()
 }
-function undo() { if (submitting.value) return; draft.value?.body.results.pop(); flipped.value = false; persist() }
-function leave() { draft.value = null; flipped.value = false; persist(); notice.value = '완료하지 않은 묶음은 기록하지 않았어요.' }
+async function leave() {
+  if (submitting.value || pending.value) return
+  draft.value = null; flipped.value = false; persist()
+  month.value = ''; selected.value = ''
+  await load()
+}
 async function submit() {
-  if (!draft.value || !ready.value || submitting.value) return
+  if (!draft.value || !pending.value || submitting.value) return
   submitting.value = true; error.value = ''
   try {
-    const count = draft.value.words.length
-    await api.submit(draft.value.kind, draft.value.body)
-    draft.value = null; persist()
-    notice.value = `${count}개 학습을 기록했어요.`
-    month.value = ''; selected.value = ''
-    await load()
+    const kind = draft.value.kind
+    today.value = await api.submit(kind, draft.value.body)
+    const words = today.value[kind].slice(0, 1)
+    draft.value = words.length ? { kind, words, body: { request_id: crypto.randomUUID(), study_date: today.value.date,
+      source_date: kind === 'review' ? today.value.review_source_date : null, results: [] } } : null
+    flipped.value = false
+    notice.value = words.length ? '1개 학습을 저장했어요. 언제든 돌아가도 기록은 남아요.' : '학습을 모두 마쳤어요. 기록을 저장했어요.'
+    persist()
+    if (!draft.value) { month.value = ''; selected.value = ''; await load() }
   } catch (e) {
-    error.value = (e as Error).message
-    if (e instanceof ApiError && e.status === 409) notice.value = '달력으로 돌아간 뒤 학습을 다시 시작해 주세요.'
+    if (e instanceof ApiError && e.status === 409) {
+      draft.value = null; flipped.value = false; persist()
+      notice.value = `${e.message} 저장된 기록을 확인한 뒤 이어서 시작해 주세요.`
+      month.value = ''; selected.value = ''; await load()
+    } else {
+      error.value = '저장을 확인하지 못했어요. 다시 시도해 주세요. 같은 응답은 한 번만 기록됩니다.'
+    }
   } finally { submitting.value = false }
 }
 onMounted(async () => {
@@ -104,9 +118,14 @@ onMounted(async () => {
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || 'null')
     if (saved && ['new', 'review'].includes(saved.kind) && Array.isArray(saved.words) && saved.words.length > 0
-      && saved.words.length <= 10 && Array.isArray(saved.body?.results) && saved.body.results.length <= saved.words.length
+      && saved.words.length === 1 && Array.isArray(saved.body?.results) && saved.body.results.length <= 1
+      && saved.body.results.every((r: { rank: number; known: unknown }) => r.rank === saved.words[0].rank
+        && (saved.kind === 'new' ? r.known === null : typeof r.known === 'boolean'))
       && typeof saved.body.request_id === 'string') {
-      draft.value = saved; notice.value = '진행 중이던 학습을 불러왔어요.'
+      draft.value = saved; flipped.value = !!saved.body.results.length
+      notice.value = saved.body.results.length ? '저장이 확인되지 않은 응답이 있어요. 저장 다시 시도를 눌러 주세요.' : '진행 중이던 학습을 불러왔어요.'
+    } else if (localStorage.getItem('english-study-draft-v2')) {
+      notice.value = '이전 방식의 미제출 학습이 있어요. 저장된 진도부터 다시 시작해 주세요.'
     }
   } catch { localStorage.removeItem(storageKey) }
 })
@@ -114,25 +133,20 @@ onMounted(async () => {
 
 <template>
   <div>
-    <p v-if="error" class="error" role="alert">{{ error }} <button class="secondary" :disabled="loading || submitting" @click="load">다시 불러오기</button></p>
+    <p v-if="error" class="error" role="alert">{{ error }} <button v-if="!pending" class="secondary" :disabled="loading || submitting" @click="load">다시 불러오기</button></p>
     <p v-if="notice" class="notice" role="status">{{ notice }}</p>
     <p v-if="loading" class="muted" role="status">학습 기록을 불러오는 중…</p>
     <section v-else-if="draft" class="study-view">
-      <button class="back-link" :disabled="submitting" @click="leave">← 달력으로 돌아가기</button>
+      <button class="back-link" :disabled="submitting || pending" @click="leave">← 달력으로 돌아가기</button>
       <p class="eyebrow">{{ draft.kind === 'new' ? 'NEW WORDS' : 'REVIEW' }}</p>
       <h1>{{ draft.kind === 'new' ? '새 단어와 만나는 시간' : '지난 단어를 다시 만나요' }}</h1>
-      <p class="muted">{{ draft.body.results.length }} / {{ draft.words.length }}개 · 묶음을 제출하면 기록돼요.</p>
-      <div class="deck-progress"><span :style="{ width: `${draft.body.results.length / draft.words.length * 100}%` }" /></div>
-      <WordCard v-if="current" :word="current" :flipped="flipped" @flip="flipped = !flipped" />
-      <div v-if="ready" class="panel finish">
-        <h2>한 묶음을 마쳤어요.</h2>
-        <p class="muted">알아요 {{ draft.body.results.filter(r => r.known).length }} · 몰라요 {{ draft.body.results.filter(r => !r.known).length }}</p>
-        <button class="primary" :disabled="submitting" @click="submit">{{ submitting ? '기록하는 중…' : '학습 기록하기' }}</button>
-      </div>
+      <p class="muted">{{ draft.kind === 'new' ? '뜻과 예문을 확인하고 학습 완료를 누르면 한 단어씩 저장돼요.' : '뜻을 떠올린 뒤 확인해 보세요. 기억 여부를 누르면 한 단어씩 저장돼요.' }}</p>
+      <WordCard v-if="current" :word="current" :flipped="flipped" :disabled="submitting || pending" @flip="flipped = !flipped" />
       <div class="card-actions">
-        <button class="secondary" :disabled="!draft.body.results.length || submitting" @click="undo">이전 카드</button>
-        <template v-if="current && flipped">
-          <button class="secondary" @click="mark(false)">몰라요</button><button class="primary" @click="mark(true)">알아요</button>
+        <button v-if="pending" class="primary" :disabled="submitting" @click="submit">{{ submitting ? '저장하는 중…' : '저장 다시 시도' }}</button>
+        <template v-else-if="current && flipped">
+          <button v-if="draft.kind === 'new'" class="primary" @click="mark(null)">학습 완료</button>
+          <template v-else><button class="secondary" @click="mark(false)">기억 안 나요</button><button class="primary" @click="mark(true)">기억나요</button></template>
         </template>
       </div>
     </section>
@@ -159,7 +173,7 @@ onMounted(async () => {
         </aside>
         <section class="panel day-detail" aria-label="날짜별 학습 기록"><div class="detail-head"><h2>{{ selected.slice(5).replace('-', '월 ') }}일의 기록</h2><span v-if="detail?.results.length" class="muted">신규 {{ detail.results.filter(r => r.kind === 'new').length }} · 복습 {{ detail.results.filter(r => r.kind === 'review').length }}</span></div>
           <p v-if="!detail" class="muted">기록을 불러오는 중…</p><div v-else-if="!detail.results.length" class="empty"><span>◌</span><p>아직 학습 기록이 없는 날이에요.</p><small>공부한 날에는 이곳에 단어가 남아요.</small></div>
-          <ul v-else class="word-list"><li v-for="(word, i) in detail.results" :key="i"><div><strong>{{ word.word }}</strong><p>{{ word.meaning }}</p></div><span class="word-kind">{{ word.kind === 'new' ? '신규' : '복습' }} · {{ word.known ? '알아요' : '몰라요' }}</span></li></ul>
+          <ul v-else class="word-list"><li v-for="(word, i) in detail.results" :key="i"><div><strong>{{ word.word }}</strong><p>{{ word.meaning }}</p></div><span class="word-kind">{{ word.kind === 'new' ? '신규 · 학습 완료' : `복습 · ${word.known === null ? '평가 없음' : word.known ? '기억나요' : '기억 안 나요'}` }}</span></li></ul>
         </section>
       </div>
     </template>

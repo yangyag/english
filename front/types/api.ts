@@ -3,7 +3,7 @@ export interface TodayOut {
   date: string; new: WordOut[]; review: WordOut[]; review_source_date: string | null
   review_total: number; review_completed: number
 }
-export interface WordResultIn { rank: number; known: boolean }
+export interface WordResultIn { rank: number; known: boolean | null }
 export interface SubmitIn { request_id: string; study_date: string; source_date: string | null; results: WordResultIn[] }
 export interface ProgressOut {
   total_words: number; learned_count: number; next_rank: number; last_study_date: string | null
@@ -11,4 +11,4 @@ export interface ProgressOut {
 }
 export interface CalendarDay { date: string; new_count: number; review_count: number }
 export interface CalendarOut { month: string; days: CalendarDay[] }
-export interface DayOut { date: string; results: (WordOut & { kind: 'new' | 'review'; known: boolean })[] }
+export interface DayOut { date: string; results: (WordOut & { kind: 'new' | 'review'; known: boolean | null })[] }

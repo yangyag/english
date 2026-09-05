@@ -16,8 +16,9 @@ def init_db() -> None:
     with engine.begin() as conn:
         conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
     Base.metadata.create_all(bind=engine)
-    from app.migration import migrate_legacy
+    from app.migration import migrate_legacy, migrate_result_schema
     with SessionLocal.begin() as db:
+        migrate_result_schema(db)
         migrate_legacy(db)
 
 
