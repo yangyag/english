@@ -13,6 +13,7 @@
 - FastAPI 백엔드 (`back/`)와 API 테스트
 - Nuxt 프론트 (`front/`, 학습 달력·카드 + 진도)
 - 달력 개편, 한 단어 즉시 저장, 신규/복습 버튼 분리 운영 반영 완료(2026-09-06). [검증 기록](docs/single-word-verification.md), [배포 기록](docs/single-word-deployment.md).
+- 오늘 신규·복습 저장 개수 누적 표시 운영 반영 완료(2026-09-06). [검증 기록](docs/today-count-verification.md), [배포 기록](docs/today-count-deployment.md).
 - 기존 EC2 구성: nginx `english-front` `:8089` + systemd `english-back` `:8090`
 
 ## 구성
