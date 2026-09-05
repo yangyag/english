@@ -18,6 +18,7 @@ const draft = ref<Draft | null>(null)
 const storageKey = 'english-study-draft-v3'
 const current = computed(() => draft.value?.words[0])
 const pending = computed(() => !!draft.value?.body.results.length)
+const savedToday = computed(() => today.value ? today.value.new_count + today.value.review_count : 0)
 const monthTitle = computed(() => month.value ? `${month.value.slice(0, 4)}년 ${Number(month.value.slice(5))}월` : '')
 const days = computed(() => {
   if (!month.value) return []
@@ -100,7 +101,9 @@ async function submit() {
     draft.value = words.length ? { kind, words, body: { request_id: crypto.randomUUID(), study_date: today.value.date,
       source_date: kind === 'review' ? today.value.review_source_date : null, results: [] } } : null
     flipped.value = false
-    notice.value = words.length ? '1개 학습을 저장했어요. 언제든 돌아가도 기록은 남아요.' : '학습을 모두 마쳤어요. 기록을 저장했어요.'
+    notice.value = words.length
+      ? `오늘 ${savedToday.value}개 학습을 저장했어요. 언제든 돌아가도 기록은 남아요.`
+      : `학습을 모두 마쳤어요. 오늘 ${savedToday.value}개 학습을 저장했어요.`
     persist()
     if (!draft.value) { month.value = ''; selected.value = ''; await load() }
   } catch (e) {
@@ -141,6 +144,7 @@ onMounted(async () => {
       <p class="eyebrow">{{ draft.kind === 'new' ? 'NEW WORDS' : 'REVIEW' }}</p>
       <h1>{{ draft.kind === 'new' ? '새 단어와 만나는 시간' : '지난 단어를 다시 만나요' }}</h1>
       <p class="muted">{{ draft.kind === 'new' ? '뜻과 예문을 확인하고 학습 완료를 누르면 한 단어씩 저장돼요.' : '뜻을 떠올린 뒤 확인해 보세요. 기억 여부를 누르면 한 단어씩 저장돼요.' }}</p>
+      <p v-if="today" class="muted" aria-label="오늘 저장한 학습">오늘 총 {{ savedToday }}개 · 신규 {{ today.new_count }}개 · 복습 {{ today.review_count }}개</p>
       <WordCard v-if="current" :word="current" :flipped="flipped" :disabled="submitting || pending" @flip="flipped = !flipped" />
       <div class="card-actions">
         <button v-if="pending" class="primary" :disabled="submitting" @click="submit">{{ submitting ? '저장하는 중…' : '저장 다시 시도' }}</button>

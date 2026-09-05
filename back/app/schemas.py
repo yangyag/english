@@ -16,6 +16,8 @@ class TodayOut(BaseModel):
     date: date
     new: list[WordOut]
     review: list[WordOut]
+    new_count: int
+    review_count: int
     review_source_date: date | None
     review_total: int
     review_completed: int

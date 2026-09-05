@@ -2,6 +2,7 @@ export interface WordOut { rank: number; word: string; meaning: string; example:
 export interface TodayOut {
   date: string; new: WordOut[]; review: WordOut[]; review_source_date: string | null
   review_total: number; review_completed: number
+  new_count: number; review_count: number
 }
 export interface WordResultIn { rank: number; known: boolean | null }
 export interface SubmitIn { request_id: string; study_date: string; source_date: string | null; results: WordResultIn[] }

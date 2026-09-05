@@ -34,8 +34,11 @@ def _review(db: Session, today: date):
 def today_payload(db: Session, today: date) -> TodayOut:
     source, ranks, remaining = _review(db, today)
     words = db.scalars(select(Word).where(Word.rank.in_(remaining[:BATCH_SIZE])).order_by(Word.rank))
+    counts = dict(db.execute(select(StudyBatch.kind, func.count(BatchResult.id)).join(BatchResult)
+                            .where(StudyBatch.study_date == today).group_by(StudyBatch.kind)).all())
     return TodayOut(date=today, new=[WordOut.model_validate(w) for w in _new_words(db)],
                     review=[WordOut.model_validate(w) for w in words], review_source_date=source,
+                    new_count=counts.get("new", 0), review_count=counts.get("review", 0),
                     review_total=len(ranks), review_completed=len(ranks) - len(remaining))
 
 

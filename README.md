@@ -56,7 +56,7 @@ aws/        EC2 SSH (connect.ps1 / connect.sh)
 | `GET` | `/v1/calendar/YYYY-MM-DD` | 그날 단어와 응답 |
 | `GET` | `/v1/progress` | 누적 고유 학습 수, 공부한 날짜 수, 다음 순위 |
 
-제출 본문은 `request_id`(UUID), `study_date`, `source_date`(신규는 null), `results`(rank·known 목록)다. 신규 known은 null 또는 생략, 복습은 불리언 필수다. 요청 번호와 내용이 같으면 성공으로 재처리하고, 같은 번호로 다른 내용이나 다음 목록 앞부분과 다른 순위를 보내면 409다. `GET /today`는 `new`, `review`, `review_source_date`, `review_total`, `review_completed`를 제공한다. 강제 `phase`는 없다. 한 단어 저장 전환 시 백엔드를 먼저 갱신한다. 기존 달력 프론트의 10개 제출도 허용하지만 신규 known은 null로 저장한다.
+제출 본문은 `request_id`(UUID), `study_date`, `source_date`(신규는 null), `results`(rank·known 목록)다. 신규 known은 null 또는 생략, 복습은 불리언 필수다. 요청 번호와 내용이 같으면 성공으로 재처리하고, 같은 번호로 다른 내용이나 다음 목록 앞부분과 다른 순위를 보내면 409다. `GET /today`는 `new`, `review`, `review_source_date`, `review_total`, `review_completed`, `new_count`, `review_count`를 제공하며 제출 응답도 같다. `new_count`·`review_count`는 오늘(KST) 저장된 신규·복습 수다. 카드와 저장 안내에는 이 서버 집계의 합계를 표시하므로 새로고침·재진입·재시도에도 중복 증가하지 않는다. 강제 `phase`는 없다. 프론트에서 사용하는 응답 필드가 추가되면 백엔드를 먼저 갱신한다. 기존 달력 프론트의 10개 제출도 허용하지만 신규 known은 null로 저장한다.
 
 인증은 없다. 1인 사용.
 
