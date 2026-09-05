@@ -28,6 +28,7 @@ aws/*.pem
 # logs / cache
 *.log
 .cache/
+backups/
 .DS_Store
 Thumbs.db
 test-results/

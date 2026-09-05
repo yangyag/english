@@ -32,8 +32,8 @@
 - [데스크톱 복습 카드](screenshots/single-word-review-1440.png)
 - [모바일 한 단어 기록](screenshots/single-word-calendar-375.png)
 
-## 범위와 남은 운영 작업
+## 운영 반영
 
-운영 반영은 아직 하지 않았다. 운영 전환 시 백업 후 새 백엔드의 nullable 이전을 먼저 적용하고 새 정적 프론트를 배포해야 한다. 구 v2 미제출 묶음은 자동 제출하지 않고 저장된 진도부터 다시 시작하도록 안내한다.
+이 문서의 테스트는 로컬 검증이다. 이후 2026-09-06 운영 백업 복원 검증, nullable 이전과 정적 프론트 전환까지 완료했다. 상세는 [배포 기록](single-word-deployment.md)을 참고한다. 구 v2 미제출 묶음은 자동 제출하지 않고 저장된 진도부터 다시 시작하도록 안내한다.
 
 기존 Starlette/httpx·anyio 사용 중단 예정 경고 2건, Nitro cache-driver 경고, Node 색상 환경변수 경고가 남아 있지만 최종 테스트와 빌드는 성공했다.

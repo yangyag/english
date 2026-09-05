@@ -12,8 +12,7 @@
 - Postgres `app.english` 스키마, 로컬과 EC2 모두 단어 6,000개 import
 - FastAPI 백엔드 (`back/`)와 API 테스트
 - Nuxt 프론트 (`front/`, 학습 달력·카드 + 진도)
-- 달력 개편은 로컬 구현·검증 단계 완료. 운영 배포는 별도 작업이다.
-- 한 단어 즉시 저장과 신규/복습 버튼 분리도 로컬 검증 완료. [검증 기록](docs/single-word-verification.md).
+- 달력 개편, 한 단어 즉시 저장, 신규/복습 버튼 분리 운영 반영 완료(2026-09-06). [검증 기록](docs/single-word-verification.md), [배포 기록](docs/single-word-deployment.md).
 - 기존 EC2 구성: nginx `english-front` `:8089` + systemd `english-back` `:8090`
 
 ## 구성
@@ -79,7 +78,7 @@ Postgres. DB `app`, 스키마 `english`.
 환경 변수 키는 `.env_sample` 을 복사해 `.env` 로 쓴다. `.env` 와 PEM은 git에 넣지 않는다.
 
 로컬 Postgres는 기존 컨테이너의 `127.0.0.1:5432`를 사용한다. 테스트는 별도의 임시 데이터베이스를 생성한다.
-EC2 Postgres는 `auto-postgres` 이고 `127.0.0.1:5432` 만 열려 있다. 바깥에서 붙을 때는 SSH 터널이 필요하다.
+EC2 Postgres는 `yangyag-postgres` 이고 `127.0.0.1:5432` 만 열려 있다(2026-09-06 운영 확인). 바깥에서 붙을 때는 SSH 터널이 필요하다.
 
 ## 로컬 실행
 

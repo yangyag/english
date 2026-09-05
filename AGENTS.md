@@ -43,7 +43,7 @@
 ## EC2 / Docker
 
 - 박스: `t3.small` 2GiB. Kafka/video/llm이 이미 떠 있다. 가용 RAM이 적다.
-- Postgres는 기존 `auto-postgres` 의 `yangyag` / `app` / `english` 를 쓴다. DB 컨테이너를 추가하지 않는다.
+- Postgres는 기존 `yangyag-postgres` 의 `yangyag` / `app` / `english` 를 쓴다(2026-09-06 운영 확인). DB 컨테이너를 추가하지 않는다.
 - 호스트 8089가 다음 빈 포트다. 8083–8088은 다른 서비스 것이다.
 - 프론트는 nginx 이미지로 만든다. 빌드는 로컬에서만 하고 EC2에는 `docker load` 로 올린다.
 - 백엔드는 Docker에 넣지 않는다. EC2 호스트에서 파이썬 venv + systemd(`english-back.service`)로 uvicorn 워커 1개를 돌린다.
