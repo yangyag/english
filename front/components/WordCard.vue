@@ -74,6 +74,7 @@ const exampleChunks = computed<Chunk[]>(() => {
   padding: 0;
   border: 0;
   background: transparent;
+  border-radius: 18px;
   cursor: pointer;
   overflow: hidden;
 }
@@ -89,7 +90,6 @@ const exampleChunks = computed<Chunk[]>(() => {
   padding: 36px 24px 28px;
   border-radius: 18px;
   position: relative;
-  box-shadow: 0 18px 40px rgba(28, 25, 20, 0.18);
 }
 .front {
   background: #1e2a24;
@@ -137,6 +137,7 @@ const exampleChunks = computed<Chunk[]>(() => {
   text-align: center;
   line-height: 1.4;
   overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 .example {
   margin: 0;

@@ -1,138 +1,107 @@
 from datetime import date
-
-from fastapi.testclient import TestClient
-
-
-def payload(start: int, end: int, known: bool = True) -> dict:
-    return {"results": [{"rank": i, "known": known} for i in range(start, end + 1)]}
+from uuid import uuid4
+import pytest
+from sqlalchemy import delete
+from app.models import Word
 
 
-def test_first_day_is_new_only(client: TestClient) -> None:
-    res = client.get("/v1/today")
-    assert res.status_code == 200
-    body = res.json()
-    assert body["date"] == "2026-08-01"
-    assert body["phase"] == "new"
-    assert body["review"] == []
-    assert body["review_done"] is False
-    assert body["new_done"] is False
-    assert [w["rank"] for w in body["new"]] == list(range(1, 11))
-    assert body["new"][0]["word"] == "w1"
-    assert body["new"][0]["meaning"] == "뜻1"
-    assert body["new"][0]["example"] == "ex 1"
-    assert body["new"][0]["example_ko"] == "예1"
+def payload(start=1, end=10, day="2026-08-01", source=None, known=True):
+    return dict(request_id=str(uuid4()), study_date=day, source_date=source,
+                results=[dict(rank=i, known=known) for i in range(start, end + 1)])
 
 
-def test_first_day_review_rejected(client: TestClient) -> None:
-    res = client.post("/v1/today/review", json=payload(1, 10))
-    assert res.status_code == 400
-    assert "복습" in res.json()["detail"]
+def post(client, start=1, end=10, day="2026-08-01", source=None, known=True):
+    return client.post('/v1/today/review' if source else '/v1/today/new', json=payload(start, end, day, source, known))
 
 
-def test_first_day_new_completes(client: TestClient) -> None:
-    res = client.post("/v1/today/new", json=payload(1, 10))
-    assert res.status_code == 200
-    body = res.json()
-    assert body["phase"] == "done"
-    assert body["new_done"] is True
-    again = client.post("/v1/today/new", json=payload(1, 10))
-    assert again.status_code == 409
+def test_visit_does_not_record_learning(client):
+    body = client.get('/v1/today').json()
+    assert len(body['new']) == 10 and body['review'] == []
+    assert client.get('/v1/calendar?month=2026-08').json()['days'] == []
 
 
-def test_new_ranks_must_match(client: TestClient) -> None:
-    res = client.post("/v1/today/new", json=payload(2, 11))
-    assert res.status_code == 400
+def test_unlimited_new_and_optional_review(client, clock):
+    assert post(client).status_code == 200
+    assert post(client, 11, 20).status_code == 200
+    clock.today = date(2026, 8, 7)
+    plan = client.get('/v1/today').json()
+    assert plan['review_total'] == 20
+    assert plan['review_source_date'] == '2026-08-01'
+    assert post(client, 21, 30, '2026-08-07').status_code == 200
+    assert client.get('/v1/today').json()['review_total'] == 20
+    clock.today = date(2026, 8, 8)
+    plan = client.get('/v1/today').json()
+    assert plan['review_source_date'] == '2026-08-07'
+    assert [w['rank'] for w in plan['review']] == list(range(21, 31))
 
 
-def test_review_is_gate_on_second_day(client: TestClient, clock) -> None:
-    assert client.post("/v1/today/new", json=payload(1, 10)).status_code == 200
+def test_review_resume_across_days_and_exhaustion(client, clock):
+    for start in (1, 11, 21):
+        assert post(client, start, start + 9).status_code == 200
+    clock.today = date(2026, 8, 3)
+    assert post(client, 1, 10, '2026-08-03', '2026-08-01', False).status_code == 200
+    clock.today = date(2026, 9, 1)
+    plan = client.get('/v1/today').json()
+    assert plan['new'] == [] and plan['review_completed'] == 10
+    assert plan['review_source_date'] == '2026-08-01'
+    for start in (11, 21):
+        assert post(client, start, start + 9, '2026-09-01', '2026-08-01').status_code == 200
+    plan = client.get('/v1/today').json()
+    assert plan['review'] == [] and plan['review_completed'] == 30
+    clock.today = date(2026, 9, 2)
+    assert client.get('/v1/today').json()['review'] == []
+    assert client.get('/v1/progress').json()['learned_count'] == 30
+
+
+def test_retry_after_midnight_and_conflicting_id(client, clock):
+    body = payload()
+    assert client.post('/v1/today/new', json=body).status_code == 200
     clock.today = date(2026, 8, 2)
-
-    today = client.get("/v1/today").json()
-    assert today["phase"] == "review"
-    assert [w["rank"] for w in today["review"]] == list(range(1, 11))
-    assert [w["rank"] for w in today["new"]] == list(range(11, 21))
-
-    blocked = client.post("/v1/today/new", json=payload(11, 20))
-    assert blocked.status_code == 409
-    assert "복습" in blocked.json()["detail"]
-
-    review = client.post("/v1/today/review", json=payload(1, 10, known=False))
-    assert review.status_code == 200
-    assert review.json()["phase"] == "new"
-    assert review.json()["review_done"] is True
-
-    second_review = client.post("/v1/today/review", json=payload(1, 10))
-    assert second_review.status_code == 409
-
-    learned = client.post("/v1/today/new", json=payload(11, 20))
-    assert learned.status_code == 200
-    assert learned.json()["phase"] == "done"
+    assert client.post('/v1/today/new', json=body).status_code == 200
+    body['results'][0]['known'] = False
+    assert client.post('/v1/today/new', json=body).status_code == 409
+    assert client.get('/v1/progress').json()['learned_count'] == 10
 
 
-def test_extra_blocked_until_new_done(client: TestClient) -> None:
-    blocked = client.get("/v1/today/extra")
-    assert blocked.status_code == 409
-    assert "신규" in blocked.json()["detail"]
-    posted = client.post("/v1/today/extra", json=payload(1, 10))
-    assert posted.status_code == 409
-
-
-def test_extra_blocked_until_review_done(client: TestClient, clock) -> None:
-    assert client.post("/v1/today/new", json=payload(1, 10)).status_code == 200
+def test_stale_new_request_does_not_advance(client, clock):
+    stale = payload()
     clock.today = date(2026, 8, 2)
-    blocked = client.get("/v1/today/extra")
-    assert blocked.status_code == 409
-    assert "복습" in blocked.json()["detail"]
+    assert client.post('/v1/today/new', json=stale).status_code == 409
+    assert client.get('/v1/progress').json()['learned_count'] == 0
 
 
-def test_extra_after_done_becomes_next_review(client: TestClient, clock) -> None:
-    first = client.post("/v1/today/new", json=payload(1, 10))
-    assert first.status_code == 200
-    assert first.json()["phase"] == "done"
-    assert first.json()["can_extra"] is True
+@pytest.mark.parametrize('ranks', [[1], list(range(2, 12)), [1] * 10])
+def test_whole_batch_required(client, ranks):
+    body = payload()
+    body['results'] = [dict(rank=r, known=True) for r in ranks]
+    assert client.post('/v1/today/new', json=body).status_code == 409
+    assert client.get('/v1/progress').json()['learned_count'] == 0
 
-    extra = client.get("/v1/today/extra")
-    assert extra.status_code == 200
-    body = extra.json()
-    assert body["phase"] == "new"
-    assert [w["rank"] for w in body["new"]] == list(range(11, 21))
-    assert body["review"] == []
 
-    submitted = client.post("/v1/today/extra", json=payload(11, 20))
-    assert submitted.status_code == 200
-    assert submitted.json()["phase"] == "done"
-    assert submitted.json()["can_extra"] is True
-    today = client.get("/v1/today").json()
-    assert today["phase"] == "done"
-    assert today["new_done"] is True
+def test_fewer_than_ten_and_empty_vocabulary(client, db):
+    db.execute(delete(Word).where(Word.rank > 3))
+    assert len(client.get('/v1/today').json()['new']) == 3
+    assert post(client, 1, 3).status_code == 200
+    assert client.get('/v1/today').json()['new'] == []
 
+
+def test_empty_db(client, db):
+    db.execute(delete(Word))
+    assert client.get('/v1/today').json()['new'] == []
+    assert client.get('/v1/progress').json()['total_words'] == 0
+
+
+def test_extra_is_free_alias_and_second_request_rejected(client):
+    body = payload()
+    assert client.post('/v1/today/extra', json=body).status_code == 200
+    assert client.post('/v1/today/new', json=body).status_code == 200
+    assert post(client).status_code == 409
+    assert len(client.get('/v1/today/extra').json()['new']) == 10
+
+
+def test_stale_review_source(client, clock):
+    post(client)
     clock.today = date(2026, 8, 2)
-    nxt = client.get("/v1/today").json()
-    assert nxt["phase"] == "review"
-    assert [w["rank"] for w in nxt["review"]] == list(range(11, 21))
-    assert [w["rank"] for w in nxt["new"]] == list(range(21, 31))
-
-
-def test_extra_ranks_must_match(client: TestClient) -> None:
-    assert client.post("/v1/today/new", json=payload(1, 10)).status_code == 200
-    res = client.post("/v1/today/extra", json=payload(12, 21))
-    assert res.status_code == 400
-
-
-def test_extra_stops_when_words_run_out(client: TestClient) -> None:
-    assert client.post("/v1/today/new", json=payload(1, 10)).status_code == 200
-    assert client.post("/v1/today/extra", json=payload(11, 20)).status_code == 200
-    assert client.post("/v1/today/extra", json=payload(21, 30)).status_code == 200
-    empty = client.get("/v1/today/extra")
-    assert empty.status_code == 400
-    assert client.get("/v1/today").json()["can_extra"] is False
-
-
-def test_skipped_day_still_reviews_last_batch(client: TestClient, clock) -> None:
-    assert client.post("/v1/today/new", json=payload(1, 10)).status_code == 200
-    clock.today = date(2026, 8, 5)
-    today = client.get("/v1/today").json()
-    assert today["phase"] == "review"
-    assert [w["rank"] for w in today["review"]] == list(range(1, 11))
-    assert [w["rank"] for w in today["new"]] == list(range(11, 21))
+    post(client, 11, 20, '2026-08-02')
+    clock.today = date(2026, 8, 3)
+    assert post(client, 1, 10, '2026-08-03', '2026-08-01').status_code == 409

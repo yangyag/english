@@ -1,36 +1,14 @@
-export type Phase = 'review' | 'new' | 'done'
-
-export interface WordOut {
-  rank: number
-  word: string
-  meaning: string
-  example: string
-  example_ko: string
-}
-
+export interface WordOut { rank: number; word: string; meaning: string; example: string; example_ko: string }
 export interface TodayOut {
-  date: string
-  phase: Phase
-  review: WordOut[]
-  new: WordOut[]
-  review_done: boolean
-  new_done: boolean
-  can_extra: boolean
+  date: string; new: WordOut[]; review: WordOut[]; review_source_date: string | null
+  review_total: number; review_completed: number
 }
-
-export interface WordResultIn {
-  rank: number
-  known: boolean
-}
-
-export interface SubmitIn {
-  results: WordResultIn[]
-}
-
+export interface WordResultIn { rank: number; known: boolean }
+export interface SubmitIn { request_id: string; study_date: string; source_date: string | null; results: WordResultIn[] }
 export interface ProgressOut {
-  total_words: number
-  learned_count: number
-  next_rank: number
-  last_study_date: string | null
-  streak_days: number
+  total_words: number; learned_count: number; next_rank: number; last_study_date: string | null
+  study_days: number; undated_learned_count: number
 }
+export interface CalendarDay { date: string; new_count: number; review_count: number }
+export interface CalendarOut { month: string; days: CalendarDay[] }
+export interface DayOut { date: string; results: (WordOut & { kind: 'new' | 'review'; known: boolean })[] }

@@ -18,7 +18,7 @@ export default defineNuxtConfig({
   // 운영: nginx 가 /v1 을 프록시하므로 앱 코드는 상대 경로만 쓴다.
   nitro: {
     devProxy: {
-      '/v1': { target: 'http://127.0.0.1:8090/v1', changeOrigin: true },
+      '/v1': { target: `${process.env.ENGLISH_API_TARGET || 'http://127.0.0.1:8090'}/v1`, changeOrigin: true },
     },
   },
 })

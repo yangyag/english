@@ -48,7 +48,7 @@ onMounted(load)
           <strong>{{ progress.learned_count.toLocaleString() }}</strong>
           <span> / {{ progress.total_words.toLocaleString() }}</span>
         </p>
-        <div class="bar" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100">
+        <div class="bar" role="progressbar" aria-label="전체 단어 학습 진도" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100">
           <span :style="{ width: percent + '%' }" />
         </div>
         <p class="percent">{{ percent }}%</p>
@@ -60,19 +60,21 @@ onMounted(load)
           <strong>{{ progress.next_rank.toLocaleString() }}</strong>
         </li>
         <li>
-          <span>연속 학습</span>
-          <strong>{{ progress.streak_days }}일</strong>
+          <span>공부한 날</span>
+          <strong>{{ progress.study_days }}일</strong>
         </li>
         <li>
           <span>마지막 학습</span>
           <strong>{{ formatDate(progress.last_study_date) }}</strong>
         </li>
       </ul>
+      <p v-if="progress.undated_learned_count" class="banner">기존 진도 중 {{ progress.undated_learned_count }}개는 날짜 기록이 없어 누적 수에만 포함했어요.</p>
     </template>
   </section>
 </template>
 
 <style scoped>
+.progress { max-width: 640px; margin: auto; padding: 28px; background: #fffefa; border: 1px solid #e1e3d9; border-radius: 20px; }
 .progress h1 { margin: 0 0 16px; font-size: 1.6rem; }
 .banner { color: #5b5348; }
 .banner.error { color: #9b2c22; }

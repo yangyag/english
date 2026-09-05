@@ -1,275 +1,174 @@
 <script setup lang="ts">
+import type { CalendarOut, DayOut, ProgressOut, TodayOut, SubmitIn, WordOut } from '~/types/api'
 import { ApiError } from '~/composables/useEnglishApi'
-import type { TodayOut, WordOut, WordResultIn } from '~/types/api'
-
-const { getToday, submitReview, submitNew, getExtra, submitExtra } = useEnglishApi()
-
+const api = useEnglishApi()
 const today = ref<TodayOut | null>(null)
-const extraMode = ref(false)
+const progress = ref<ProgressOut | null>(null)
+const calendar = ref<CalendarOut | null>(null)
+const detail = ref<DayOut | null>(null)
+const month = ref('')
+const selected = ref('')
+const error = ref('')
+const notice = ref('')
 const loading = ref(true)
 const submitting = ref(false)
-const error = ref('')
-const index = ref(0)
 const flipped = ref(false)
-const results = ref<WordResultIn[]>([])
-
-const deck = computed<WordOut[]>(() => {
-  if (!today.value) return []
-  if (extraMode.value) return today.value.new
-  if (today.value.phase === 'review') return today.value.review
-  if (today.value.phase === 'new') return today.value.new
-  return []
+type Draft = { kind: 'new' | 'review'; words: WordOut[]; body: SubmitIn }
+const draft = ref<Draft | null>(null)
+const storageKey = 'english-study-draft-v2'
+const current = computed(() => draft.value?.words[draft.value.body.results.length])
+const ready = computed(() => !!draft.value && draft.value.body.results.length === draft.value.words.length)
+const monthTitle = computed(() => month.value ? `${month.value.slice(0, 4)}년 ${Number(month.value.slice(5))}월` : '')
+const days = computed(() => {
+  if (!month.value) return []
+  const [y, m] = month.value.split('-').map(Number) as [number, number]
+  const offset = new Date(y, m - 1, 1).getDay()
+  const count = new Date(y, m, 0).getDate()
+  return Array.from({ length: Math.ceil((offset + count) / 7) * 7 }, (_, i) => {
+    const n = i - offset + 1
+    if (n < 1 || n > count) return null
+    const date = `${month.value}-${String(n).padStart(2, '0')}`
+    return { n, date, record: calendar.value?.days.find(d => d.date === date) }
+  })
 })
-
-const current = computed(() => deck.value[index.value] ?? null)
-const answered = computed(() => results.value.length)
-const knownCount = computed(() => results.value.filter((item) => item.known).length)
-const unknownCount = computed(() => results.value.filter((item) => !item.known).length)
-const readyToSubmit = computed(
-  () => deck.value.length > 0 && results.value.length === deck.value.length,
-)
-const phaseLabel = computed(() => {
-  if (!today.value) return ''
-  if (extraMode.value) return '더 하기'
-  if (today.value.phase === 'review') return '복습'
-  if (today.value.phase === 'new') return '신규'
-  return '완료'
-})
-
-function resetDeck() {
-  index.value = 0
-  flipped.value = false
-  results.value = []
+let calendarRequest = 0
+let detailRequest = 0
+async function loadMonth() {
+  const id = ++calendarRequest
+  calendar.value = null
+  try { const data = await api.getCalendar(month.value); if (id === calendarRequest) calendar.value = data }
+  catch (e) { if (id === calendarRequest) error.value = (e as Error).message }
 }
-
+async function selectDay(day: string) {
+  selected.value = day
+  detail.value = null
+  const id = ++detailRequest
+  try { const data = await api.getDay(day); if (id === detailRequest) detail.value = data }
+  catch (e) { if (id === detailRequest) error.value = (e as Error).message }
+}
+function moveMonth(delta: number) {
+  const [y, m] = month.value.split('-').map(Number) as [number, number]
+  const date = new Date(y, m - 1 + delta, 1)
+  month.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  void loadMonth()
+  void selectDay(month.value === today.value?.date.slice(0, 7) ? today.value.date : `${month.value}-01`)
+}
+function persist() {
+  try { if (draft.value) localStorage.setItem(storageKey, JSON.stringify(draft.value)); else localStorage.removeItem(storageKey) }
+  catch { notice.value = '이 브라우저에서는 임시 저장을 사용할 수 없습니다. 제출 전에는 화면을 유지해 주세요.' }
+}
 async function load() {
-  loading.value = true
-  error.value = ''
-  extraMode.value = false
+  loading.value = true; error.value = ''
   try {
-    today.value = await getToday()
-    resetDeck()
-  } catch (caught) {
-    error.value = caught instanceof ApiError ? caught.detail : '오늘 학습을 불러오지 못했습니다.'
-  } finally {
-    loading.value = false
-  }
+    ;[today.value, progress.value] = await Promise.all([api.getToday(), api.getProgress()])
+    month.value ||= today.value.date.slice(0, 7)
+    selected.value ||= today.value.date
+    await Promise.all([loadMonth(), selectDay(selected.value)])
+  } catch (e) { error.value = (e as Error).message }
+  finally { loading.value = false }
 }
-
-function flip() {
-  if (readyToSubmit.value) return
-  flipped.value = !flipped.value
+async function start(kind: 'new' | 'review') {
+  error.value = ''; notice.value = ''
+  try {
+    today.value = await api.getToday()
+    const words = today.value[kind]
+    if (!words.length) { notice.value = '이 학습은 모두 완료했어요.'; return }
+    draft.value = { kind, words, body: { request_id: crypto.randomUUID(), study_date: today.value.date,
+      source_date: kind === 'review' ? today.value.review_source_date : null, results: [] } }
+    flipped.value = false; persist()
+  } catch (e) { error.value = (e as Error).message }
 }
-
 function mark(known: boolean) {
-  const word = current.value
-  if (!word || !flipped.value || readyToSubmit.value) return
-  results.value = [
-    ...results.value.filter((item) => item.rank !== word.rank),
-    { rank: word.rank, known },
-  ]
-  if (index.value < deck.value.length - 1) {
-    index.value += 1
-    flipped.value = false
-  }
+  if (!draft.value || !current.value || !flipped.value || submitting.value) return
+  draft.value.body.results.push({ rank: current.value.rank, known }); flipped.value = false; persist()
 }
-
-function undo() {
-  if (results.value.length === 0) return
-  results.value = results.value.slice(0, -1)
-  index.value = Math.max(0, results.value.length)
-  flipped.value = false
-}
-
-async function startExtra() {
-  loading.value = true
-  error.value = ''
-  try {
-    today.value = await getExtra()
-    extraMode.value = true
-    resetDeck()
-  } catch (caught) {
-    extraMode.value = false
-    error.value = caught instanceof ApiError ? caught.detail : '추가 학습을 열지 못했습니다.'
-  } finally {
-    loading.value = false
-  }
-}
-
+function undo() { if (submitting.value) return; draft.value?.body.results.pop(); flipped.value = false; persist() }
+function leave() { draft.value = null; flipped.value = false; persist(); notice.value = '완료하지 않은 묶음은 기록하지 않았어요.' }
 async function submit() {
-  if (!today.value || !readyToSubmit.value) return
-  submitting.value = true
-  error.value = ''
+  if (!draft.value || !ready.value || submitting.value) return
+  submitting.value = true; error.value = ''
   try {
-    if (extraMode.value) {
-      await submitExtra(results.value)
-    } else if (today.value.phase === 'review') {
-      await submitReview(results.value)
-    } else {
-      await submitNew(results.value)
-    }
-    extraMode.value = false
-    today.value = await getToday()
-    resetDeck()
-  } catch (caught) {
-    if (caught instanceof ApiError && caught.status === 409) {
-      await load()
-      return
-    }
-    error.value = caught instanceof ApiError ? caught.detail : '제출에 실패했습니다.'
-  } finally {
-    submitting.value = false
-  }
+    const count = draft.value.words.length
+    await api.submit(draft.value.kind, draft.value.body)
+    draft.value = null; persist()
+    notice.value = `${count}개 학습을 기록했어요.`
+    month.value = ''; selected.value = ''
+    await load()
+  } catch (e) {
+    error.value = (e as Error).message
+    if (e instanceof ApiError && e.status === 409) notice.value = '달력으로 돌아간 뒤 학습을 다시 시작해 주세요.'
+  } finally { submitting.value = false }
 }
-
-function onKey(event: KeyboardEvent) {
-  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
-  if (event.key === ' ' || event.key === 'Enter') {
-    event.preventDefault()
-    flip()
-  } else if (event.key === '1') {
-    mark(true)
-  } else if (event.key === '2') {
-    mark(false)
-  }
-}
-
-onMounted(load)
-onMounted(() => window.addEventListener('keydown', onKey))
-onUnmounted(() => window.removeEventListener('keydown', onKey))
+onMounted(async () => {
+  await load()
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || 'null')
+    if (saved && ['new', 'review'].includes(saved.kind) && Array.isArray(saved.words) && saved.words.length > 0
+      && saved.words.length <= 10 && Array.isArray(saved.body?.results) && saved.body.results.length <= saved.words.length
+      && typeof saved.body.request_id === 'string') {
+      draft.value = saved; notice.value = '진행 중이던 학습을 불러왔어요.'
+    }
+  } catch { localStorage.removeItem(storageKey) }
+})
 </script>
 
 <template>
-  <section class="today">
-    <header class="head">
-      <p class="kicker">{{ today?.date ?? '' }}</p>
-      <h1>{{ phaseLabel || '오늘 학습' }}</h1>
-      <p v-if="deck.length" class="meta">{{ answered }} / {{ deck.length }}</p>
-    </header>
-
-    <p v-if="error" class="banner error">{{ error }}</p>
-    <p v-else-if="loading" class="banner">불러오는 중…</p>
-
-    <template v-else-if="today?.phase === 'done' && !extraMode">
-      <div class="done">
-        <p class="done-title">오늘 학습을 마쳤습니다.</p>
-        <p class="done-copy">내일은 마지막에 배운 10개를 복습합니다. 오늘은 10개 더 할 수 있습니다.</p>
-        <div class="row">
-          <button
-            v-if="today.can_extra"
-            type="button"
-            class="btn primary"
-            :disabled="loading"
-            @click="startExtra"
-          >
-            오늘 더 하기
-          </button>
-          <NuxtLink class="btn ghost" to="/progress">진도 보기</NuxtLink>
-        </div>
+  <div>
+    <p v-if="error" class="error" role="alert">{{ error }} <button class="secondary" :disabled="loading || submitting" @click="load">다시 불러오기</button></p>
+    <p v-if="notice" class="notice" role="status">{{ notice }}</p>
+    <p v-if="loading" class="muted" role="status">학습 기록을 불러오는 중…</p>
+    <section v-else-if="draft" class="study-view">
+      <button class="back-link" :disabled="submitting" @click="leave">← 달력으로 돌아가기</button>
+      <p class="eyebrow">{{ draft.kind === 'new' ? 'NEW WORDS' : 'REVIEW' }}</p>
+      <h1>{{ draft.kind === 'new' ? '새 단어와 만나는 시간' : '지난 단어를 다시 만나요' }}</h1>
+      <p class="muted">{{ draft.body.results.length }} / {{ draft.words.length }}개 · 묶음을 제출하면 기록돼요.</p>
+      <div class="deck-progress"><span :style="{ width: `${draft.body.results.length / draft.words.length * 100}%` }" /></div>
+      <WordCard v-if="current" :word="current" :flipped="flipped" @flip="flipped = !flipped" />
+      <div v-if="ready" class="panel finish">
+        <h2>한 묶음을 마쳤어요.</h2>
+        <p class="muted">알아요 {{ draft.body.results.filter(r => r.known).length }} · 몰라요 {{ draft.body.results.filter(r => !r.known).length }}</p>
+        <button class="primary" :disabled="submitting" @click="submit">{{ submitting ? '기록하는 중…' : '학습 기록하기' }}</button>
+      </div>
+      <div class="card-actions">
+        <button class="secondary" :disabled="!draft.body.results.length || submitting" @click="undo">이전 카드</button>
+        <template v-if="current && flipped">
+          <button class="secondary" @click="mark(false)">몰라요</button><button class="primary" @click="mark(true)">알아요</button>
+        </template>
+      </div>
+    </section>
+    <template v-else-if="today">
+      <header class="intro"><div><p class="eyebrow">MY WORD JOURNAL</p><h1>공부한 날이 쌓이는 곳</h1><p class="muted">많이 해도, 조금 해도 괜찮아요. 오늘의 단어를 만나볼까요?</p></div><div class="total"><strong>{{ progress?.learned_count.toLocaleString() }}</strong><span>학습한 단어</span></div></header>
+      <div class="dashboard">
+        <section class="panel calendar-panel" aria-label="학습 달력">
+          <div class="calendar-head"><h2>{{ monthTitle }}</h2><div class="month-controls"><button aria-label="이전 달" @click="moveMonth(-1)">‹</button><button aria-label="다음 달" @click="moveMonth(1)">›</button></div></div>
+          <div class="calendar-grid weekdays"><span v-for="day in ['일','월','화','수','목','금','토']" :key="day">{{ day }}</span></div>
+          <div class="calendar-grid">
+            <template v-for="(day, i) in days" :key="i">
+              <button v-if="day" class="day" :class="{ selected: selected === day.date, today: today.date === day.date, studied: !!day.record }"
+                :aria-label="`${day.date}${day.record ? ' 학습 기록 있음' : ''}`" :aria-pressed="selected === day.date" :aria-current="today.date === day.date ? 'date' : undefined" @click="selectDay(day.date)">
+                <span>{{ day.n }}</span><span class="study-dot" :class="{ filled: !!day.record }" />
+              </button><span v-else />
+            </template>
+          </div>
+          <div class="calendar-legend"><span class="study-dot filled" /> 공부한 날 <span class="today-legend">밑줄은 오늘</span></div>
+        </section>
+        <aside class="learning-options">
+          <section class="start-panel"><p class="eyebrow">AT YOUR OWN PACE</p><h2>오늘도, 나의 속도로</h2><p>{{ today.new.length ? '지난 진도에서 이어서 시작해요. 하루에 몇 개든 자유롭게.' : '모든 새 단어를 학습했어요. 남은 복습과 기록을 확인해 보세요.' }}</p><button v-if="today.new.length" class="primary" @click="start('new')">새 단어 배우기 <span>↗</span></button></section>
+          <section v-if="today.review_total" class="panel review-panel"><span class="review-tag">지난 학습 돌아보기</span><h2>{{ today.review_source_date?.slice(5).replace('-', '월 ') }}일에 배운 단어</h2><p class="muted">{{ today.review_total }}개 중 {{ today.review_completed }}개 복습 완료</p><template v-if="today.review.length"><p>기억을 한 번 꺼내볼까요?<br>복습은 원할 때 선택하면 돼요.</p><button class="secondary" @click="start('review')">{{ today.review_completed ? '복습 이어하기' : '복습하기' }} →</button></template><p v-else class="muted">이날의 단어를 모두 복습했어요.</p></section>
+          <section v-else class="panel review-panel"><span class="review-tag">작은 시작</span><p>오늘 배운 단어는 다음에 왔을 때<br>다시 만나볼 수 있어요.</p></section>
+        </aside>
+        <section class="panel day-detail" aria-label="날짜별 학습 기록"><div class="detail-head"><h2>{{ selected.slice(5).replace('-', '월 ') }}일의 기록</h2><span v-if="detail?.results.length" class="muted">신규 {{ detail.results.filter(r => r.kind === 'new').length }} · 복습 {{ detail.results.filter(r => r.kind === 'review').length }}</span></div>
+          <p v-if="!detail" class="muted">기록을 불러오는 중…</p><div v-else-if="!detail.results.length" class="empty"><span>◌</span><p>아직 학습 기록이 없는 날이에요.</p><small>공부한 날에는 이곳에 단어가 남아요.</small></div>
+          <ul v-else class="word-list"><li v-for="(word, i) in detail.results" :key="i"><div><strong>{{ word.word }}</strong><p>{{ word.meaning }}</p></div><span class="word-kind">{{ word.kind === 'new' ? '신규' : '복습' }} · {{ word.known ? '알아요' : '몰라요' }}</span></li></ul>
+        </section>
       </div>
     </template>
-
-    <template v-else-if="current">
-      <ol class="dots" aria-label="진행">
-        <li
-          v-for="(word, i) in deck"
-          :key="word.rank"
-          :class="{
-            'is-current': i === index,
-            'is-known': results.find((item) => item.rank === word.rank)?.known === true,
-            'is-unknown': results.find((item) => item.rank === word.rank)?.known === false,
-          }"
-        />
-      </ol>
-
-      <WordCard :key="current.rank" :word="current" :flipped="flipped" @flip="flip" />
-
-      <div class="actions">
-        <template v-if="readyToSubmit">
-          <p class="summary">알아요 {{ knownCount }} · 몰라요 {{ unknownCount }}</p>
-          <div class="row">
-            <button type="button" class="ghost" :disabled="submitting" @click="undo">이전</button>
-            <button type="button" class="primary" :disabled="submitting" @click="submit">
-              {{ submitting ? '제출 중…' : '제출하기' }}
-            </button>
-          </div>
-        </template>
-        <template v-else-if="flipped">
-          <div class="row">
-            <button type="button" class="ghost" :disabled="answered === 0" @click="undo">이전</button>
-            <button type="button" class="unknown" @click="mark(false)">몰라요</button>
-            <button type="button" class="known" @click="mark(true)">알아요</button>
-          </div>
-        </template>
-        <p v-else class="hint">카드를 뒤집은 다음 알아요 / 몰라요를 고릅니다.</p>
-      </div>
-    </template>
-  </section>
+  </div>
 </template>
 
 <style scoped>
-.today {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  min-width: 0;
-  width: 100%;
-}
-.head h1 { margin: 4px 0 0; font-size: 1.6rem; }
-.kicker, .meta { margin: 0; color: #6b6258; font-size: 0.92rem; }
-.banner { margin: 0; color: #5b5348; }
-.banner.error { color: #9b2c22; }
-.done { padding: 24px 8px 8px; text-align: center; }
-.done-title { margin: 0 0 8px; font-size: 1.25rem; font-weight: 700; }
-.done-copy { margin: 0 0 20px; color: #5b5348; line-height: 1.5; }
-.dots {
-  display: flex;
-  gap: 6px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  justify-content: center;
-  min-width: 0;
-}
-.dots li {
-  display: block;
-  box-sizing: border-box;
-  flex: 0 0 10px;
-  width: 10px;
-  height: 10px;
-  min-width: 10px;
-  max-width: 10px;
-  border-radius: 50%;
-  background: #d9d0c2;
-}
-.dots li.is-current { outline: 2px solid #1e2a24; outline-offset: 2px; }
-.dots li.is-known { background: #2c6e49; }
-.dots li.is-unknown { background: #b23a2f; }
-.actions { min-height: 88px; }
-.hint, .summary { margin: 12px 0; text-align: center; color: #5b5348; }
-.row {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-button, .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  border: 0;
-  border-radius: 999px;
-  padding: 12px 18px;
-  font: inherit;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
-}
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-.ghost { background: #ece6da; color: #1c1914; }
-button.known { background: #2c6e49; color: #fff; min-width: 112px; }
-button.unknown { background: #b23a2f; color: #fff; min-width: 112px; }
-.primary { background: #1e2a24; color: #f4efe4; min-width: 140px; }
+.intro { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 30px; }.intro p { margin-bottom: 0; }.total { display: grid; gap: 6px; text-align: right; flex-shrink: 0; }.total strong { font-size: 36px; font-family: Georgia, serif; font-weight: 500; }.total span { font-size: 13px; color: #758075; }
+.dashboard { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 24px; align-items: start; }.calendar-head,.detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }.calendar-head h2 { margin: 0; }.month-controls { display: flex; gap: 6px; }.month-controls button { width: 36px; height: 36px; border: 1px solid #e1e3d9; border-radius: 50%; background: transparent; font-size: 25px; color: #284c3e; }.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }.weekdays { text-align: center; margin: 26px 0 12px; color: #8b9287; font-size: 12px; }.day { border: 0; border-radius: 13px; background: transparent; color: #445548; min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }.day:hover { background: #f1f3ea; }.day.today > span:first-child { text-decoration: underline; text-underline-offset: 4px; font-weight: 750; }.day.studied { background: #eef2e8; }.day.selected { background: #284c3e; color: white; }.study-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: transparent; }.study-dot.filled { background: #739269; }.selected .filled { background: #d6e8b4; }.calendar-legend { display: flex; align-items: center; gap: 8px; border-top: 1px solid #eceee4; padding-top: 18px; margin-top: 16px; color: #7e877a; font-size: 11px; }.today-legend { margin-left: auto; }.learning-options { display: grid; gap: 18px; }.start-panel { background: #e6ebdb; padding: 26px; border-radius: 20px; }.start-panel h2 { font-size: 23px; margin: 14px 0 10px; }.start-panel p:not(.eyebrow) { font-size: 14px; color: #65725e; }.start-panel button { width: 100%; text-align: left; margin-top: 14px; }.start-panel button span { float: right; }.review-tag { color: #8b7456; font-size: 12px; }.review-panel h2 { font-size: 17px; }.review-panel p { font-size: 14px; }.review-panel button { width: 100%; }.day-detail { grid-column: 1 / -1; }.detail-head h2 { margin: 0; font-size: 18px; }.detail-head > span { font-size: 13px; }.empty { text-align: center; padding: 26px 0 14px; color: #909789; }.empty > span { font-size: 32px; }.empty p { margin: 6px 0; font-size: 14px; }.empty small { font-size: 12px; }.word-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; padding: 0; list-style: none; }.word-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid #eceee4; padding: 16px 0; overflow-wrap: anywhere; }.word-list strong { font-family: Georgia, serif; font-size: 20px; }.word-list p { font-size: 13px; color: #758075; margin: 6px 0 0; }.word-kind { flex-shrink: 0; font-size: 11px; color: #8b7456; }.notice { border-left: 3px solid #739269; padding: 8px 14px; background: #edf2e6; }.study-view { max-width: 620px; margin: auto; }.back-link { border: 0; background: transparent; padding: 0; color: #73826c; margin: 0 0 28px; }.deck-progress { height: 5px; background: #e1e5d8; margin: 24px 0; border-radius: 4px; overflow: hidden; }.deck-progress span { display: block; height: 100%; background: #739269; }.card-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 24px; }.finish { text-align: center; padding: 48px 20px; }
+@media(max-width: 760px) { .dashboard { grid-template-columns: 1fr; gap: 18px; }.learning-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }.intro { align-items: flex-start; }.intro .muted { font-size: 14px; }.total strong { font-size: 28px; }.word-list { grid-template-columns: 1fr; } }
+@media(max-width: 480px) { .intro { display: block; }.total { display: flex; text-align: left; align-items: baseline; margin-top: 18px; gap: 8px; }.learning-options { grid-template-columns: 1fr; }.day { min-height: 46px; }.calendar-grid { gap: 3px; }.detail-head { flex-wrap: wrap; }.start-panel { padding: 22px; } }
 </style>

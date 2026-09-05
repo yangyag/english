@@ -1,8 +1,8 @@
 # english
 
-필수 영어단어 PDF 6,000개로 매일 10개씩 외우는 학습 사이트.
+필수 영어단어 PDF 6,000개를 나의 속도로 학습하고, 공부한 날을 달력에 기록하는 개인용 사이트.
 
-하루 흐름은 고정이다. 첫날은 신규 10개, 다음날부터는 **어제 배운 10개 복습을 끝낸 뒤** 신규 10개를 연다. 날짜를 건너뛰어도 마지막에 외운 10개를 복습한다.
+달력에서 공부한 날짜와 그날의 단어를 확인한다. 하루 개수 제한 없이 10개씩 배우고, 다시 방문하면 마지막 신규 학습일의 단어를 선택적으로 복습한다. 복습을 건너뛰어도 신규 학습을 할 수 있다.
 
 ## 현재 상태
 
@@ -11,8 +11,9 @@
 - PDF → `vocab/*.md` (뜻 + 예문, 순위 1–6000)
 - Postgres `app.english` 스키마, 로컬과 EC2 모두 단어 6,000개 import
 - FastAPI 백엔드 (`back/`)와 API 테스트
-- Nuxt 프론트 (`front/`, 오늘 학습 + 진도)
-- EC2 배포: nginx `english-front` `:8089` + systemd `english-back` `:8090`
+- Nuxt 프론트 (`front/`, 학습 달력·카드 + 진도)
+- 달력 개편은 로컬 구현·검증 단계 완료. 운영 배포는 별도 작업이다.
+- 기존 EC2 구성: nginx `english-front` `:8089` + systemd `english-back` `:8090`
 
 ## 구성
 
@@ -31,11 +32,14 @@ aws/        EC2 SSH (connect.ps1 / connect.sh)
 
 ## 학습 규칙
 
-- 배치 크기: 10
+- 배치 크기: 10, 마지막 묶음은 남은 수만큼. 일일 제한 없음.
 - 날짜: Asia/Seoul
-- `GET /v1/today` 의 `phase`: `review` → `new` → `done`
-- 복습이 남아 있으면 신규 제출은 409
-- `done` 이후 `오늘 더 하기` 로 다음 10개를 더 할 수 있다. 다음날 복습은 마지막 10개다.
+- 신규 학습은 마지막 진도부터 이어진다. 복습은 선택 사항이다.
+- 복습 대상은 오늘 이전 가장 최근 신규 학습일에 배운 단어 전체다. 같은 날 30개를 배우면 다음 방문에 30개를 제안한다.
+- 복습은 10개씩 완료 순위를 저장한다. 복습만 한 날은 대상 날짜를 바꾸지 않는다. 새 신규 학습일이 생기면 다음날부터 그 날짜가 대상이다.
+- 달력에는 제출 완료일을 기록하고 신규·복습 개수를 구분한다. 누적 학습 수에는 신규 고유 단어만 포함한다.
+- 카드 중간 응답은 브라우저 임시 저장이다. 묶음을 제출하기 전에는 달력·진도에 반영하지 않는다.
+- 제출 날짜가 바뀌었으면 다시 시작한다. 이미 성공한 요청의 재시도는 날짜가 바뀌어도 중복 저장하지 않는다.
 - 알아/몰라 결과는 기록만 한다. 틀린 단어를 다음날 복습에 다시 넣지는 않는다.
 
 ## API
@@ -44,11 +48,14 @@ aws/        EC2 SSH (connect.ps1 / connect.sh)
 |--------|------|------|
 | `GET` | `/v1/health` | DB ping |
 | `GET` | `/v1/today` | 오늘 복습/신규 목록 |
-| `POST` | `/v1/today/review` | 복습 10개 한 번에 제출 |
-| `POST` | `/v1/today/new` | 신규 10개 한 번에 제출 |
-| `GET` | `/v1/today/extra` | 오늘 할당이 끝난 뒤 다음 10개 |
-| `POST` | `/v1/today/extra` | 추가 10개 한 번에 제출 |
-| `GET` | `/v1/progress` | 학습 개수, 다음 순위, 연속일 |
+| `POST` | `/v1/today/review` | 다음 복습 묶음 전체 제출 |
+| `POST` | `/v1/today/new` | 다음 신규 묶음 전체 제출 |
+| `GET/POST` | `/v1/today/extra` | today 조회 / 신규 제출의 호환 별칭 |
+| `GET` | `/v1/calendar?month=YYYY-MM` | 월별 공부한 날짜와 신규·복습 수 |
+| `GET` | `/v1/calendar/YYYY-MM-DD` | 그날 단어와 응답 |
+| `GET` | `/v1/progress` | 누적 고유 학습 수, 공부한 날짜 수, 다음 순위 |
+
+제출 본문은 `request_id`(UUID), `study_date`, `source_date`(신규는 null), `results`(rank·known 목록)다. 요청 번호와 내용이 같으면 성공으로 재처리하고, 같은 번호로 다른 내용이나 최신 묶음과 다른 순위를 보내면 409다. `GET /today`는 `new`, `review`, `review_source_date`, `review_total`, `review_completed`를 제공한다. 강제 `phase`는 제거했다. 구 프론트와 새 백엔드의 API는 호환되지 않으므로 함께 전환해야 한다.
 
 인증은 없다. 1인 사용.
 
@@ -60,12 +67,16 @@ Postgres. DB `app`, 스키마 `english`.
 |--------|------|
 | `word` | 순위, 철자, 뜻, 예문, 예문 한국어(`example_ko`) |
 | `study_state` | 다음 신규 순위, 마지막 학습일 (1행) |
-| `study_session` | 날짜별 복습/신규 구간과 완료 시각 |
-| `word_result` | 세션별 알아/몰라 |
+| `study_session` | 보존된 구 날짜별 세션 |
+| `word_result` | 보존된 구 응답 원본 |
+| `study_batch` | 제출 UUID, 완료일, 신규/복습, 복습 원본 날짜 |
+| `batch_result` | 묶음별 단어와 알아요/몰라요 |
+
+시작 시 SQLAlchemy 모델로 새 테이블을 만들고 기존 응답을 반복 가능한 방식으로 이전한다. 원본 테이블과 진도는 보존한다. 과거 날짜가 없는 진도는 달력 날짜를 만들지 않고 누적 수에만 포함한다. 자세한 [이전·복구 절차](docs/calendar-migration.md)를 배포 전에 확인한다.
 
 환경 변수 키는 `.env_sample` 을 복사해 `.env` 로 쓴다. `.env` 와 PEM은 git에 넣지 않는다.
 
-로컬 Postgres는 Docker `english-postgres` (`127.0.0.1:5432`).  
+로컬 Postgres는 기존 컨테이너의 `127.0.0.1:5432`를 사용한다. 테스트는 별도의 임시 데이터베이스를 생성한다.
 EC2 Postgres는 `auto-postgres` 이고 `127.0.0.1:5432` 만 열려 있다. 바깥에서 붙을 때는 SSH 터널이 필요하다.
 
 ## 로컬 실행
@@ -90,6 +101,22 @@ npm run dev
 ```
 
 브라우저: `http://127.0.0.1:3000`
+
+## 검증
+
+백엔드 테스트는 `back`에서 가상환경의 `python -m pytest -q`로 실행한다. 로컬 접속을 강제하고 `english_test_<UUID>` DB를 생성하여 종료 시 삭제한다. 로컬 계정에 CREATEDB 권한이 필요하다. `.env`가 없는 이 작업 환경에서는 기존 `yangyag-postgres` 컨테이너를 이용하며 비밀번호를 출력·저장하지 않는다. 필요하면 `ENGLISH_TEST_POSTGRES_CONTAINER`로 컨테이너 이름을 지정한다. 컨테이너 환경에 인증 정보가 없으면 테스트 전용 임시 역할을 생성하고 종료 시 삭제한다.
+
+```powershell
+cd front
+npm ci
+npx playwright install chromium
+npm run typecheck
+npm run generate
+cd ..
+.\back\.venv\Scripts\python.exe scripts\verify_browser.py
+```
+
+브라우저 검증 스크립트는 별도 임시 DB에 합성 단어 35개를 준비하고 FastAPI `18090`과 Nuxt dev `13000`으로 실행한다. 테스트 후 서버와 임시 DB를 정리한다. `ENGLISH_API_TARGET`은 검증용 dev proxy 주소이며 운영 빌드에 서버 런타임을 추가하지 않는다. 스크린샷은 `docs/screenshots/`에 남는다. [계획](docs/calendar-plan.md), [검증 결과](docs/calendar-verification.md).
 
 단어 import (이미 넣었으면 같은 rank는 덮어쓴다):
 

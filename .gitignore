@@ -30,6 +30,8 @@ aws/*.pem
 .cache/
 .DS_Store
 Thumbs.db
+test-results/
+playwright-report/
 
 # editor
 .idea/

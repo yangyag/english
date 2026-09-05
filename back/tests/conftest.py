@@ -1,14 +1,24 @@
 import os
-
-# 테스트는 실제 학습 데이터(english 스키마)와 격리한다.
-# 실제 env 변수는 .env 파일보다 우선하므로, app 임포트 전에 지정한다.
-os.environ.setdefault("PGSCHEMA", "english_test")
-
+from uuid import uuid4
 from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+
+# Always use a newly created LOCAL database, never a configured production schema.
+from local_testing import configure_local
+configure_local()
+from app.config import get_settings
+
+admin_url = get_settings().database_url
+test_database = "english_test_" + uuid4().hex
+admin = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+with admin.connect() as conn:
+    conn.exec_driver_sql(f'CREATE DATABASE "{test_database}"')
+os.environ["PGDATABASE"] = test_database
+get_settings.cache_clear()
 
 from app.clock import get_today
 from app.db import engine, get_db, init_db
@@ -17,12 +27,17 @@ from app.models import Word
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _tables() -> None:
+def _tables():
     init_db()
+    yield
+    engine.dispose()
+    with admin.connect() as conn:
+        conn.exec_driver_sql(f'DROP DATABASE "{test_database}" WITH (FORCE)')
+    admin.dispose()
 
 
 @pytest.fixture
-def db() -> Session:
+def db():
     connection = engine.connect()
     trans = connection.begin()
     session = Session(bind=connection)
@@ -30,8 +45,7 @@ def db() -> Session:
         yield session
     finally:
         session.close()
-        if trans.is_active:
-            trans.rollback()
+        trans.rollback()
         connection.close()
 
 
@@ -39,32 +53,24 @@ def db() -> Session:
 def clock():
     class Frozen:
         today = date(2026, 8, 1)
-
     return Frozen
 
 
 @pytest.fixture
-def words(db: Session) -> None:
-    for i in range(1, 31):
-        db.merge(Word(rank=i, word=f"w{i}", meaning=f"뜻{i}", example=f"ex {i}", example_ko=f"예{i}"))
+def words(db):
+    db.add_all([Word(rank=i, word=f"w{i}", meaning=f"뜻{i}", example=f"ex {i}", example_ko=f"예{i}") for i in range(1, 31)])
     db.flush()
 
 
 @pytest.fixture
-def client(db: Session, clock, words) -> TestClient:
+def client(db, clock, words):
     def override_db():
-        try:
-            yield db
-        finally:
-            if db.in_transaction():
-                db.flush()
-                db.expire_all()
-
-    def override_today() -> date:
-        return clock.today
-
+        yield db
+        db.flush()
     app.dependency_overrides[get_db] = override_db
-    app.dependency_overrides[get_today] = override_today
-    with TestClient(app) as test_client:
-        yield test_client
+    app.dependency_overrides[get_today] = lambda: clock.today
+    # Startup migration is tested separately; running it during a transaction
+    # would take the same advisory lock on another connection.
+    with TestClient(app) as c:
+        yield c
     app.dependency_overrides.clear()

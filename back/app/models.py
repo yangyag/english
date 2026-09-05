@@ -61,3 +61,24 @@ class WordResult(Base):
     known: Mapped[bool] = mapped_column(Boolean, nullable=False)
     studied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     session: Mapped[StudySession] = relationship(back_populates="results")
+
+
+class StudyBatch(Base):
+    __tablename__ = "study_batch"
+    __table_args__ = {"schema": SCHEMA}
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(100), unique=True)
+    fingerprint: Mapped[str] = mapped_column(Text)
+    study_date: Mapped[date] = mapped_column(Date, index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    source_date: Mapped[date | None] = mapped_column(Date, index=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class BatchResult(Base):
+    __tablename__ = "batch_result"
+    __table_args__ = (UniqueConstraint("batch_id", "rank", name="uq_batch_result_rank"), {"schema": SCHEMA})
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey(f"{SCHEMA}.study_batch.id"), index=True)
+    rank: Mapped[int] = mapped_column(ForeignKey(f"{SCHEMA}.word.rank"), index=True)
+    known: Mapped[bool] = mapped_column(Boolean)

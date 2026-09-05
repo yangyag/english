@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db
-from app.routers import health, progress, today
+from app.routers import calendar, health, progress, today
 
 
 @asynccontextmanager
@@ -13,7 +13,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="english-back", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="english-back", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,3 +23,4 @@ app.add_middleware(
 app.include_router(health.router, prefix="/v1")
 app.include_router(today.router, prefix="/v1")
 app.include_router(progress.router, prefix="/v1")
+app.include_router(calendar.router, prefix="/v1")

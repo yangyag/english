@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     pgpassword: str
     pgdatabase: str = "app"
     pgschema: str = "english"
-    batch_size: int = 10
 
     @property
     def database_url(self) -> str:

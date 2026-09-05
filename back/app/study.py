@@ -1,249 +1,111 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
-
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-
-from app.config import get_settings
-from app.models import StudySession, StudyState, Word, WordResult
-from app.schemas import Phase, SubmitIn, TodayOut, WordOut
+from app.migration import lock_study
+from app.models import BatchResult, StudyBatch, StudyState, Word
+from app.schemas import SubmitIn, TodayOut, WordOut
 
 KST = ZoneInfo("Asia/Seoul")
-STATE_ID = 1
+BATCH_SIZE = 10
 
 
-def _now() -> datetime:
-    return datetime.now(KST)
+def _next_rank(db: Session) -> int:
+    state = db.get(StudyState, 1)
+    return state.next_rank if state else 1
 
 
-def _state(db: Session) -> StudyState:
-    row = db.get(StudyState, STATE_ID)
-    if row is None:
-        row = StudyState(id=STATE_ID, next_rank=1, last_study_date=None)
-        db.add(row)
-        db.flush()
-    return row
+def _new_words(db: Session) -> list[Word]:
+    return list(db.scalars(select(Word).where(Word.rank >= _next_rank(db)).order_by(Word.rank).limit(BATCH_SIZE)))
 
 
-def _max_rank(db: Session) -> int:
-    return db.scalar(select(func.max(Word.rank))) or 0
-
-
-def _words(db: Session, start: int | None, end: int | None) -> list[Word]:
-    if start is None or end is None or start > end:
-        return []
-    return list(
-        db.scalars(select(Word).where(Word.rank.between(start, end)).order_by(Word.rank))
-    )
-
-
-def _phase(session: StudySession) -> Phase:
-    if session.new_done_at is not None:
-        return "done"
-    if session.review_from_rank is not None and session.review_done_at is None:
-        return "review"
-    return "new"
-
-
-def _range_for_new(next_rank: int, batch: int, max_rank: int) -> tuple[int | None, int | None]:
-    if max_rank < 1 or next_rank > max_rank:
-        return None, None
-    return next_rank, min(next_rank + batch - 1, max_rank)
-
-
-def get_or_create_session(db: Session, today: date) -> StudySession:
-    row = db.scalar(select(StudySession).where(StudySession.study_date == today))
-    if row is not None:
-        return row
-
-    settings = get_settings()
-    state = _state(db)
-    max_rank = _max_rank(db)
-    new_from, new_to = _range_for_new(state.next_rank, settings.batch_size, max_rank)
-    review_from = review_to = None
-    if state.next_rank > 1:
-        review_to = state.next_rank - 1
-        review_from = max(1, review_to - settings.batch_size + 1)
-
-    row = StudySession(
-        study_date=today,
-        review_from_rank=review_from,
-        review_to_rank=review_to,
-        new_from_rank=new_from,
-        new_to_rank=new_to,
-    )
-    db.add(row)
-    db.flush()
-    return row
+def _review(db: Session, today: date):
+    source = db.scalar(select(func.max(StudyBatch.study_date)).where(StudyBatch.kind == "new", StudyBatch.study_date < today))
+    if source is None:
+        return None, [], []
+    ranks = list(db.scalars(select(BatchResult.rank).join(StudyBatch).where(
+        StudyBatch.kind == "new", StudyBatch.study_date == source).distinct().order_by(BatchResult.rank)))
+    completed = set(db.scalars(select(BatchResult.rank).join(StudyBatch).where(
+        StudyBatch.kind == "review", StudyBatch.source_date == source)))
+    return source, ranks, [rank for rank in ranks if rank not in completed]
 
 
 def today_payload(db: Session, today: date) -> TodayOut:
-    session = get_or_create_session(db, today)
-    review = _words(db, session.review_from_rank, session.review_to_rank)
-    new = _words(db, session.new_from_rank, session.new_to_rank)
-    phase = _phase(session)
-    if not review and not new:
-        phase = "done"
-    return TodayOut(
-        date=today,
-        phase=phase,
-        review=[WordOut.model_validate(w) for w in review],
-        new=[WordOut.model_validate(w) for w in new],
-        review_done=session.review_done_at is not None,
-        new_done=session.new_done_at is not None,
-        can_extra=_can_extra(db, session),
-    )
+    source, ranks, remaining = _review(db, today)
+    words = db.scalars(select(Word).where(Word.rank.in_(remaining[:BATCH_SIZE])).order_by(Word.rank))
+    return TodayOut(date=today, new=[WordOut.model_validate(w) for w in _new_words(db)],
+                    review=[WordOut.model_validate(w) for w in words], review_source_date=source,
+                    review_total=len(ranks), review_completed=len(ranks) - len(remaining))
 
 
-def _expected_ranks(db: Session, session: StudySession, kind: str) -> list[int]:
-    if kind == "review":
-        start, end = session.review_from_rank, session.review_to_rank
+def submit(db: Session, today: date, body: SubmitIn, kind: str) -> TodayOut:
+    lock_study(db)
+    db.expire_all()
+    fingerprint = kind + ':' + body.model_dump_json(exclude={"request_id"})
+    prior = db.scalar(select(StudyBatch).where(StudyBatch.request_id == str(body.request_id)))
+    if prior:
+        if prior.fingerprint != fingerprint:
+            raise HTTPException(409, "같은 요청 번호로 다른 결과를 제출할 수 없습니다.")
+        return today_payload(db, today)
+    if body.study_date != today:
+        raise HTTPException(409, "날짜가 바뀌었습니다. 오늘 학습을 다시 열어 주세요.")
+    if kind == "new":
+        if body.source_date is not None:
+            raise HTTPException(400, "신규 학습에는 복습 날짜를 지정하지 않습니다.")
+        expected = [word.rank for word in _new_words(db)]
     else:
-        start, end = session.new_from_rank, session.new_to_rank
-    return [w.rank for w in _words(db, start, end)]
-
-
-def _extra_words(db: Session) -> list[Word]:
-    settings = get_settings()
-    state = _state(db)
-    start, end = _range_for_new(state.next_rank, settings.batch_size, _max_rank(db))
-    return _words(db, start, end)
-
-
-def _can_extra(db: Session, session: StudySession) -> bool:
-    if session.review_from_rank is not None and session.review_done_at is None:
-        return False
-    if session.new_from_rank is None or session.new_done_at is None:
-        return False
-    return len(_extra_words(db)) > 0
-
-
-def _require_ready_for_extra(session: StudySession) -> None:
-    if session.review_from_rank is not None and session.review_done_at is None:
-        raise HTTPException(status_code=409, detail="복습을 먼저 완료하세요.")
-    if session.new_from_rank is not None and session.new_done_at is None:
-        raise HTTPException(status_code=409, detail="오늘 신규를 먼저 완료하세요.")
-    if session.new_from_rank is None:
-        raise HTTPException(status_code=400, detail="오늘 배울 새 단어가 없습니다.")
-
-
-def extra_payload(db: Session, today: date) -> TodayOut:
-    session = get_or_create_session(db, today)
-    _require_ready_for_extra(session)
-    words = _extra_words(db)
-    if not words:
-        raise HTTPException(status_code=400, detail="더 배울 단어가 없습니다.")
-    return TodayOut(
-        date=today,
-        phase="new",
-        review=[],
-        new=[WordOut.model_validate(w) for w in words],
-        review_done=session.review_done_at is not None,
-        new_done=True,
-        can_extra=True,
-    )
-
-
-def _save_results(
-    db: Session,
-    session: StudySession,
-    kind: str,
-    body: SubmitIn,
-    expected: list[int] | None = None,
-) -> int:
-    if expected is None:
-        expected = _expected_ranks(db, session, kind)
+        source, _, remaining = _review(db, today)
+        if source is None or source != body.source_date:
+            raise HTTPException(409, "복습 대상이 바뀌었습니다. 학습을 다시 열어 주세요.")
+        expected = remaining[:BATCH_SIZE]
     if not expected:
-        raise HTTPException(status_code=400, detail="오늘 제출할 단어가 없습니다.")
-    got = [item.rank for item in body.results]
-    if sorted(got) != expected:
-        raise HTTPException(
-            status_code=400,
-            detail=f"제출 순위가 오늘 {kind} 목록과 다릅니다.",
-        )
-    now = _now()
-    for item in body.results:
-        db.add(
-            WordResult(
-                session_id=session.id,
-                rank=item.rank,
-                kind=kind,
-                known=item.known,
-                studied_at=now,
-            )
-        )
-    return len(body.results)
-
-
-def submit_review(db: Session, today: date, body: SubmitIn) -> TodayOut:
-    session = get_or_create_session(db, today)
-    if session.review_from_rank is None:
-        raise HTTPException(status_code=400, detail="오늘 복습할 단어가 없습니다.")
-    if session.review_done_at is not None:
-        raise HTTPException(status_code=409, detail="오늘 복습은 이미 완료했습니다.")
-    _save_results(db, session, "review", body)
-    session.review_done_at = _now()
+        raise HTTPException(409, "제출할 단어가 없습니다. 기록을 확인해 주세요.")
+    if sorted(item.rank for item in body.results) != expected:
+        raise HTTPException(409, "학습 목록이 바뀌었거나 응답이 빠졌습니다. 학습을 다시 열어 주세요.")
+    batch = StudyBatch(request_id=str(body.request_id), fingerprint=fingerprint, study_date=today,
+                       kind=kind, source_date=body.source_date, completed_at=datetime.now(KST))
+    db.add(batch)
     db.flush()
-    return today_payload(db, today)
-
-
-def submit_new(db: Session, today: date, body: SubmitIn) -> TodayOut:
-    session = get_or_create_session(db, today)
-    if session.review_from_rank is not None and session.review_done_at is None:
-        raise HTTPException(status_code=409, detail="복습을 먼저 완료하세요.")
-    if session.new_from_rank is None:
-        raise HTTPException(status_code=400, detail="오늘 배울 새 단어가 없습니다.")
-    if session.new_done_at is not None:
-        raise HTTPException(status_code=409, detail="오늘 신규 학습은 이미 완료했습니다.")
-    _save_results(db, session, "new", body)
-    session.new_done_at = _now()
-    state = _state(db)
-    state.next_rank = session.new_to_rank + 1
-    state.last_study_date = today
-    db.flush()
-    return today_payload(db, today)
-
-
-def submit_extra(db: Session, today: date, body: SubmitIn) -> TodayOut:
-    session = get_or_create_session(db, today)
-    _require_ready_for_extra(session)
-    words = _extra_words(db)
-    expected = [w.rank for w in words]
-    if not expected:
-        raise HTTPException(status_code=400, detail="더 배울 단어가 없습니다.")
-    _save_results(db, session, "new", body, expected)
-    state = _state(db)
-    state.next_rank = expected[-1] + 1
-    state.last_study_date = today
+    db.add_all([BatchResult(batch_id=batch.id, rank=r.rank, known=r.known) for r in body.results])
+    if kind == "new":
+        state = db.get(StudyState, 1)
+        if state is None:
+            state = StudyState(id=1)
+            db.add(state)
+        state.next_rank = expected[-1] + 1
+        state.last_study_date = today
     db.flush()
     return today_payload(db, today)
 
 
 def progress_payload(db: Session, today: date) -> dict:
-    state = _state(db)
-    total = db.scalar(select(func.count()).select_from(Word)) or 0
-    learned = max(0, state.next_rank - 1)
-    streak = 0
-    cursor = today
-    if state.last_study_date is not None:
-        if state.last_study_date == today or state.last_study_date == today - timedelta(days=1):
-            cursor = state.last_study_date
-            while True:
-                row = db.scalar(
-                    select(StudySession).where(
-                        StudySession.study_date == cursor,
-                        StudySession.new_done_at.is_not(None),
-                    )
-                )
-                if row is None:
-                    break
-                streak += 1
-                cursor = cursor - timedelta(days=1)
-    return {
-        "total_words": total,
-        "learned_count": learned,
-        "next_rank": state.next_rank,
-        "last_study_date": state.last_study_date,
-        "streak_days": streak,
-    }
+    recorded = select(BatchResult.rank).join(StudyBatch).where(StudyBatch.kind == "new")
+    learned = db.scalar(select(func.count()).select_from(Word).where(
+        (Word.rank < _next_rank(db)) | Word.rank.in_(recorded))) or 0
+    dated = db.scalar(select(func.count(func.distinct(BatchResult.rank))).select_from(BatchResult).join(StudyBatch)
+                      .where(StudyBatch.kind == "new")) or 0
+    return dict(total_words=db.scalar(select(func.count()).select_from(Word)) or 0,
+                learned_count=learned, next_rank=_next_rank(db),
+                last_study_date=db.scalar(select(func.max(StudyBatch.study_date))),
+                study_days=db.scalar(select(func.count(func.distinct(StudyBatch.study_date)))) or 0,
+                undated_learned_count=max(0, learned - dated))
+
+
+def calendar_payload(db: Session, month: date) -> dict:
+    end = date(month.year + (month.month == 12), month.month % 12 + 1, 1)
+    rows = db.execute(select(StudyBatch.study_date, StudyBatch.kind, func.count(BatchResult.id))
+                      .join(BatchResult).where(StudyBatch.study_date >= month, StudyBatch.study_date < end)
+                      .group_by(StudyBatch.study_date, StudyBatch.kind).order_by(StudyBatch.study_date))
+    days = {}
+    for day, kind, count in rows:
+        days.setdefault(day, {"date": day, "new_count": 0, "review_count": 0})[kind + "_count"] = count
+    return {"month": month.strftime("%Y-%m"), "days": list(days.values())}
+
+
+def day_payload(db: Session, day: date) -> dict:
+    rows = db.execute(select(Word, StudyBatch.kind, BatchResult.known).join(
+        BatchResult, Word.rank == BatchResult.rank).join(StudyBatch)
+        .where(StudyBatch.study_date == day).order_by(StudyBatch.id, Word.rank))
+    return {"date": day, "results": [dict(**WordOut.model_validate(w).model_dump(), kind=k, known=v)
+                                      for w, k, v in rows]}

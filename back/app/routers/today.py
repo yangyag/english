@@ -22,7 +22,7 @@ def post_today_review(
     db: Session = Depends(get_db),
     today: date = Depends(get_today),
 ) -> TodayOut:
-    return study.submit_review(db, today, body)
+    return study.submit(db, today, body, "review")
 
 
 @router.post("/today/new", response_model=TodayOut)
@@ -31,12 +31,12 @@ def post_today_new(
     db: Session = Depends(get_db),
     today: date = Depends(get_today),
 ) -> TodayOut:
-    return study.submit_new(db, today, body)
+    return study.submit(db, today, body, "new")
 
 
 @router.get("/today/extra", response_model=TodayOut)
 def get_today_extra(db: Session = Depends(get_db), today: date = Depends(get_today)) -> TodayOut:
-    return study.extra_payload(db, today)
+    return study.today_payload(db, today)
 
 
 @router.post("/today/extra", response_model=TodayOut)
@@ -45,4 +45,4 @@ def post_today_extra(
     db: Session = Depends(get_db),
     today: date = Depends(get_today),
 ) -> TodayOut:
-    return study.submit_extra(db, today, body)
+    return study.submit(db, today, body, "new")

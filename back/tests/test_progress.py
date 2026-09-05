@@ -1,44 +1,30 @@
 from datetime import date
-
-from fastapi.testclient import TestClient
-
-
-def payload(start: int, end: int) -> dict:
-    return {"results": [{"rank": i, "known": True} for i in range(start, end + 1)]}
+from test_today import post
 
 
-def test_progress_starts_empty(client: TestClient) -> None:
-    res = client.get("/v1/progress")
-    assert res.status_code == 200
-    body = res.json()
-    assert body["total_words"] == 30
-    assert body["learned_count"] == 0
-    assert body["next_rank"] == 1
-    assert body["last_study_date"] is None
-    assert body["streak_days"] == 0
+def test_progress_and_calendar(client, clock):
+    initial = client.get('/v1/progress').json()
+    assert initial['learned_count'] == initial['study_days'] == 0
+    assert initial['last_study_date'] is None
+    post(client)
+    post(client, 11, 20)
+    clock.today = date(2026, 9, 1)
+    post(client, 1, 10, '2026-09-01', '2026-08-01', False)
+    progress = client.get('/v1/progress').json()
+    assert progress['learned_count'] == 20
+    assert progress['study_days'] == 2
+    assert progress['last_study_date'] == '2026-09-01'
+    assert client.get('/v1/calendar?month=2026-08').json()['days'] == [dict(date='2026-08-01', new_count=20, review_count=0)]
+    assert client.get('/v1/calendar?month=2026-09').json()['days'] == [dict(date='2026-09-01', new_count=0, review_count=10)]
+    results = client.get('/v1/calendar/2026-09-01').json()['results']
+    assert len(results) == 10 and all(r['kind'] == 'review' and not r['known'] for r in results)
+    assert client.get('/v1/calendar/2026-09-02').json()['results'] == []
 
 
-def test_progress_after_two_days(client: TestClient, clock) -> None:
-    assert client.post("/v1/today/new", json=payload(1, 10)).status_code == 200
-    day1 = client.get("/v1/progress").json()
-    assert day1["learned_count"] == 10
-    assert day1["next_rank"] == 11
-    assert day1["last_study_date"] == "2026-08-01"
-    assert day1["streak_days"] == 1
-
-    clock.today = date(2026, 8, 2)
-    assert client.post("/v1/today/review", json=payload(1, 10)).status_code == 200
-    assert client.post("/v1/today/new", json=payload(11, 20)).status_code == 200
-    day2 = client.get("/v1/progress").json()
-    assert day2["learned_count"] == 20
-    assert day2["next_rank"] == 21
-    assert day2["streak_days"] == 2
-
-
-def test_streak_breaks_after_gap(client: TestClient, clock) -> None:
-    assert client.post("/v1/today/new", json=payload(1, 10)).status_code == 200
-    clock.today = date(2026, 8, 4)
-    body = client.get("/v1/progress").json()
-    assert body["learned_count"] == 10
-    assert body["streak_days"] == 0
-    assert body["last_study_date"] == "2026-08-01"
+def test_month_validation_and_year_boundary(client, clock):
+    for month in ['bad', '2026-13', '9999-12', '0000-01']:
+        assert client.get('/v1/calendar', params={'month': month}).status_code == 422
+    clock.today = date(2026, 12, 31)
+    post(client, day='2026-12-31')
+    assert len(client.get('/v1/calendar?month=2026-12').json()['days']) == 1
+    assert client.get('/v1/calendar?month=2027-01').json()['days'] == []
